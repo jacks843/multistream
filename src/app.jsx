@@ -2,11 +2,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ExternalLink,
   LayoutGrid,
+  Maximize2,
+  Minimize2,
   Plus,
   Trash2,
   Volume2,
   VolumeX
 } from "lucide-react";
+import StreamPlayer from "./StreamPlayer";
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -63,63 +66,27 @@ function parseStream(input) {
 
 function getGridClasses(count) {
   if (count <= 1) return "grid-cols-1";
-  if (count === 2) return "grid-cols-1 lg:grid-cols-2";
+  if (count === 2) return "grid-cols-1 md:grid-cols-2";
   if (count <= 4) return "grid-cols-1 md:grid-cols-2";
-  if (count <= 6) return "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
-  if (count <= 9) return "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
-  return "grid-cols-1 md:grid-cols-2 xl:grid-cols-4";
+  return "grid-cols-1 md:grid-cols-2";
 }
 
-function getTwitchParent() {
-  if (typeof window === "undefined") return "localhost";
-  return window.location.hostname || "localhost";
-}
-
-function buildEmbedUrl(stream, isActive) {
-  if (stream.type === "youtube") {
-    const params = new URLSearchParams({
-      autoplay: "1",
-      mute: isActive ? "0" : "1",
-      rel: "0",
-      modestbranding: "1",
-      playsinline: "1",
-      enablejsapi: "1"
-    });
-
-    return `https://www.youtube.com/embed/${stream.sourceId}?${params.toString()}`;
-  }
-
-  const parent = getTwitchParent();
-
-  if (stream.type === "twitch-channel") {
-    const params = new URLSearchParams({
-      channel: stream.sourceId,
-      parent,
-      muted: isActive ? "false" : "true",
-      autoplay: "true"
-    });
-
-    return `https://player.twitch.tv/?${params.toString()}`;
-  }
-
-  const params = new URLSearchParams({
-    video: `v${stream.sourceId}`,
-    parent,
-    muted: isActive ? "false" : "true",
-    autoplay: "true",
-    playsinline: "true"
-  });
-
-  return `https://player.twitch.tv/?${params.toString()}`;
-}
-
-function StreamCard({ stream, isActive, onMakeActive, onRemove }) {
-  const embedUrl = useMemo(() => buildEmbedUrl(stream, isActive), [stream, isActive]);
-
+function StreamCard({
+  stream,
+  isActive,
+  isFocused,
+  onMakeActive,
+  onToggleFocus,
+  onRemove
+}) {
   return (
     <article
       className={`overflow-hidden rounded-3xl border bg-white shadow-sm transition hover:shadow-lg ${
-        isActive ? "border-black ring-2 ring-black/10" : "border-black/10"
+        isFocused
+          ? "border-black ring-2 ring-black/10"
+          : isActive
+          ? "border-slate-300 ring-1 ring-slate-200"
+          : "border-black/10"
       }`}
     >
       <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3">
@@ -137,6 +104,18 @@ function StreamCard({ stream, isActive, onMakeActive, onRemove }) {
         </button>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={onToggleFocus}
+            className="rounded-xl p-2 text-black/60 transition hover:bg-black/5 hover:text-black"
+            title={isFocused ? "Exit focus mode" : "Focus this stream"}
+          >
+            {isFocused ? (
+              <Minimize2 className="h-4 w-4" />
+            ) : (
+              <Maximize2 className="h-4 w-4" />
+            )}
+          </button>
+
           <a
             href={stream.raw}
             target="_blank"
@@ -146,6 +125,7 @@ function StreamCard({ stream, isActive, onMakeActive, onRemove }) {
           >
             <ExternalLink className="h-4 w-4" />
           </a>
+
           <button
             onClick={onRemove}
             className="rounded-xl p-2 text-black/60 transition hover:bg-black/5 hover:text-red-600"
@@ -157,19 +137,14 @@ function StreamCard({ stream, isActive, onMakeActive, onRemove }) {
       </div>
 
       <div className="aspect-video bg-black">
-        <iframe
-          key={`${stream.id}-${isActive ? "active" : "muted"}`}
-          src={embedUrl}
-          title={stream.label}
-          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-          allowFullScreen
-          className="h-full w-full"
-        />
+        <StreamPlayer stream={stream} isActive={isActive} />
       </div>
 
       <div className="flex items-center justify-between px-4 py-3 text-xs text-black/55">
         <span>{stream.type === "youtube" ? "YouTube" : "Twitch"}</span>
-        <span>{isActive ? "Audio active" : "Muted"}</span>
+        <span>
+          {isFocused ? "Focused" : isActive ? "Audio active" : "Muted"}
+        </span>
       </div>
     </article>
   );
@@ -178,6 +153,7 @@ function StreamCard({ stream, isActive, onMakeActive, onRemove }) {
 export default function App() {
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
+
   const [streams, setStreams] = useState(() => {
     try {
       const stored = localStorage.getItem("multiview-streams");
@@ -213,6 +189,14 @@ export default function App() {
     }
   });
 
+  const [focusedId, setFocusedId] = useState(() => {
+    try {
+      return localStorage.getItem("multiview-focused-id") || "demo-yt";
+    } catch {
+      return "demo-yt";
+    }
+  });
+
   useEffect(() => {
     try {
       localStorage.setItem("multiview-streams", JSON.stringify(streams));
@@ -230,15 +214,30 @@ export default function App() {
   }, [activeId]);
 
   useEffect(() => {
+    try {
+      if (focusedId) {
+        localStorage.setItem("multiview-focused-id", focusedId);
+      } else {
+        localStorage.removeItem("multiview-focused-id");
+      }
+    } catch {}
+  }, [focusedId]);
+
+  useEffect(() => {
     if (!streams.length) {
       setActiveId(null);
+      setFocusedId(null);
       return;
     }
 
     if (!streams.some((stream) => stream.id === activeId)) {
       setActiveId(streams[0].id);
     }
-  }, [streams, activeId]);
+
+    if (!streams.some((stream) => stream.id === focusedId)) {
+      setFocusedId(streams[0].id);
+    }
+  }, [streams, activeId, focusedId]);
 
   function addStream() {
     const parsed = parseStream(input);
@@ -250,6 +249,7 @@ export default function App() {
 
     setStreams((current) => [...current, parsed]);
     setActiveId(parsed.id);
+    setFocusedId(parsed.id);
     setInput("");
     setError("");
   }
@@ -261,7 +261,22 @@ export default function App() {
   function clearAll() {
     setStreams([]);
     setActiveId(null);
+    setFocusedId(null);
   }
+
+  function toggleFocus(id) {
+    setFocusedId((current) => (current === id ? null : id));
+  }
+
+  const focusedStream = useMemo(
+    () => streams.find((stream) => stream.id === focusedId) || null,
+    [streams, focusedId]
+  );
+
+  const secondaryStreams = useMemo(
+    () => streams.filter((stream) => stream.id !== focusedId),
+    [streams, focusedId]
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -276,8 +291,8 @@ export default function App() {
                 Watch multiple livestreams on one page
               </h1>
               <p className="mt-3 max-w-3xl text-sm text-slate-600 sm:text-base">
-                Add as many streams as you like. Click a stream header to make that
-                one the active audio stream and mute the others.
+                Click a stream title to switch audio. Use the expand button to make
+                one stream the main focus.
               </p>
             </div>
 
@@ -290,6 +305,9 @@ export default function App() {
               </div>
               <div className="mt-1">
                 Active audio: <span className="font-semibold">{activeId ? "1" : "0"}</span>
+              </div>
+              <div className="mt-1">
+                Focus mode: <span className="font-semibold">{focusedId ? "On" : "Off"}</span>
               </div>
             </div>
           </div>
@@ -320,26 +338,12 @@ export default function App() {
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
 
           <div className="mt-5 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <strong>Browser note:</strong> modern Chrome, Edge, Firefox, and Safari
-            are fine for this setup. The main limitations are embed rules, autoplay
-            policies, and Twitch requiring the correct live domain in the{" "}
-            <code>parent</code> parameter.
+            <strong>Note:</strong> YouTube and Twitch audio still depend on browser
+            autoplay rules, so the first sound change may need a click.
           </div>
         </header>
 
-        {streams.length ? (
-          <main className={`grid ${getGridClasses(streams.length)} gap-5`}>
-            {streams.map((stream) => (
-              <StreamCard
-                key={stream.id}
-                stream={stream}
-                isActive={stream.id === activeId}
-                onMakeActive={() => setActiveId(stream.id)}
-                onRemove={() => removeStream(stream.id)}
-              />
-            ))}
-          </main>
-        ) : (
+        {!streams.length && (
           <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-12 text-center shadow-sm">
             <h2 className="text-2xl font-semibold">No streams added yet</h2>
             <p className="mx-auto mt-3 max-w-2xl text-slate-600">
@@ -347,6 +351,51 @@ export default function App() {
               page.
             </p>
           </div>
+        )}
+
+        {!!streams.length && focusedStream && (
+          <main className="grid grid-cols-1 gap-5 xl:grid-cols-[2fr_1fr]">
+            <div>
+              <StreamCard
+                stream={focusedStream}
+                isActive={focusedStream.id === activeId}
+                isFocused={true}
+                onMakeActive={() => setActiveId(focusedStream.id)}
+                onToggleFocus={() => toggleFocus(focusedStream.id)}
+                onRemove={() => removeStream(focusedStream.id)}
+              />
+            </div>
+
+            <div className={`grid ${getGridClasses(secondaryStreams.length)} gap-5 content-start`}>
+              {secondaryStreams.map((stream) => (
+                <StreamCard
+                  key={stream.id}
+                  stream={stream}
+                  isActive={stream.id === activeId}
+                  isFocused={false}
+                  onMakeActive={() => setActiveId(stream.id)}
+                  onToggleFocus={() => toggleFocus(stream.id)}
+                  onRemove={() => removeStream(stream.id)}
+                />
+              ))}
+            </div>
+          </main>
+        )}
+
+        {!!streams.length && !focusedStream && (
+          <main className={`grid ${getGridClasses(streams.length)} gap-5`}>
+            {streams.map((stream) => (
+              <StreamCard
+                key={stream.id}
+                stream={stream}
+                isActive={stream.id === activeId}
+                isFocused={false}
+                onMakeActive={() => setActiveId(stream.id)}
+                onToggleFocus={() => toggleFocus(stream.id)}
+                onRemove={() => removeStream(stream.id)}
+              />
+            ))}
+          </main>
         )}
       </div>
     </div>
