@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Check,
-  ChevronLeft,
-  ChevronRight,
   Columns2,
   Copy,
   ExternalLink,
+  GripVertical,
   LayoutGrid,
   Link as LinkIcon,
   Maximize2,
@@ -241,63 +240,63 @@ function LayoutToggle({ layoutMode, setLayoutMode }) {
 
 function StreamCard({
   stream,
-  index,
-  total,
   isActive,
   isFocused,
   onMakeActive,
   onToggleFocus,
   onRemove,
-  onMoveLeft,
-  onMoveRight,
   onStartEditLabel,
-  audioUnlocked
+  audioUnlocked,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  isDragging,
+  isDragTarget
 }) {
   return (
     <article
-      className={`overflow-hidden rounded-2xl border shadow-sm transition duration-200 ${
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      className={`overflow-hidden rounded-2xl border shadow-sm transition duration-150 ${
         isFocused
           ? "border-[var(--accent-border)] bg-[var(--card-bg)] ring-1 ring-[var(--accent-soft)]"
           : isActive
           ? "border-[var(--accent-soft)] bg-[var(--card-bg)] ring-1 ring-[var(--accent-soft)]"
           : "border-[var(--card-border)] bg-[var(--card-bg)]"
+      } ${isDragging ? "opacity-50" : ""} ${
+        isDragTarget ? "ring-2 ring-[var(--accent-soft)]" : ""
       }`}
     >
       <div className="flex items-center justify-between gap-2 border-b border-[var(--card-border)] px-3 py-2">
-        <button
-          onClick={onMakeActive}
-          title="Make this the active audio stream"
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-        >
-          {isActive && audioUnlocked ? (
-            <Volume2 className="h-3.5 w-3.5 shrink-0 text-[var(--accent-text)]" />
-          ) : (
-            <VolumeX className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" />
-          )}
-          <span className="truncate text-sm font-medium text-[var(--text-main)]">
-            {getDisplayLabel(stream)}
-          </span>
-        </button>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div
+            className="cursor-grab rounded-lg p-1.5 text-[var(--muted)] active:cursor-grabbing"
+            title="Drag to reorder"
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </div>
+
+          <button
+            onClick={onMakeActive}
+            title="Make this the active audio stream"
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          >
+            {isActive && audioUnlocked ? (
+              <Volume2 className="h-3.5 w-3.5 shrink-0 text-[var(--accent-text)]" />
+            ) : (
+              <VolumeX className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" />
+            )}
+            <span className="truncate text-sm font-medium text-[var(--text-main)]">
+              {getDisplayLabel(stream)}
+            </span>
+          </button>
+        </div>
 
         <div className="flex items-center gap-0.5">
-          <button
-            onClick={onMoveLeft}
-            disabled={index === 0}
-            className="rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)] disabled:cursor-not-allowed disabled:opacity-30"
-            title="Move earlier"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </button>
-
-          <button
-            onClick={onMoveRight}
-            disabled={index === total - 1}
-            className="rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)] disabled:cursor-not-allowed disabled:opacity-30"
-            title="Move later"
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-
           <button
             onClick={onStartEditLabel}
             className="rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)]"
@@ -375,6 +374,9 @@ export default function App() {
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [editingLabelId, setEditingLabelId] = useState(null);
   const [editingLabelValue, setEditingLabelValue] = useState("");
+  const [draggedId, setDraggedId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem("multiview-theme") || "dark";
@@ -579,22 +581,6 @@ export default function App() {
     setFocusedId((current) => (current === id ? null : id));
   }
 
-  function moveStreamLeft(id) {
-    setStreams((current) => {
-      const index = current.findIndex((stream) => stream.id === id);
-      if (index <= 0) return current;
-      return moveItem(current, index, index - 1);
-    });
-  }
-
-  function moveStreamRight(id) {
-    setStreams((current) => {
-      const index = current.findIndex((stream) => stream.id === id);
-      if (index === -1 || index >= current.length - 1) return current;
-      return moveItem(current, index, index + 1);
-    });
-  }
-
   function startEditLabel(stream) {
     setEditingLabelId(stream.id);
     setEditingLabelValue(stream.customLabel || "");
@@ -616,6 +602,56 @@ export default function App() {
   function cancelEditLabel() {
     setEditingLabelId(null);
     setEditingLabelValue("");
+  }
+
+  function handleDragStart(id) {
+    return (event) => {
+      setDraggedId(id);
+      setDragOverId(id);
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", id);
+    };
+  }
+
+  function handleDragOver(id) {
+    return (event) => {
+      event.preventDefault();
+      if (dragOverId !== id) {
+        setDragOverId(id);
+      }
+    };
+  }
+
+  function handleDrop(id) {
+    return (event) => {
+      event.preventDefault();
+
+      const sourceId = draggedId || event.dataTransfer.getData("text/plain");
+      if (!sourceId || sourceId === id) {
+        setDraggedId(null);
+        setDragOverId(null);
+        return;
+      }
+
+      setStreams((current) => {
+        const fromIndex = current.findIndex((stream) => stream.id === sourceId);
+        const toIndex = current.findIndex((stream) => stream.id === id);
+
+        if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+          return current;
+        }
+
+        return moveItem(current, fromIndex, toIndex);
+      });
+
+      setDraggedId(null);
+      setDragOverId(null);
+    };
+  }
+
+  function handleDragEnd() {
+    setDraggedId(null);
+    setDragOverId(null);
   }
 
   async function copyShareUrl() {
@@ -645,16 +681,38 @@ export default function App() {
     return streams.filter((stream) => stream.id !== focusedId);
   }, [streams, focusedId]);
 
+  function renderCard(stream) {
+    return (
+      <StreamCard
+        key={stream.id}
+        stream={stream}
+        isActive={stream.id === activeId}
+        isFocused={focusedId === stream.id}
+        onMakeActive={() => setActiveId(stream.id)}
+        onToggleFocus={() => toggleFocus(stream.id)}
+        onRemove={() => removeStream(stream.id)}
+        onStartEditLabel={() => startEditLabel(stream)}
+        audioUnlocked={audioUnlocked}
+        onDragStart={handleDragStart(stream.id)}
+        onDragOver={handleDragOver(stream.id)}
+        onDrop={handleDrop(stream.id)}
+        onDragEnd={handleDragEnd}
+        isDragging={draggedId === stream.id}
+        isDragTarget={dragOverId === stream.id && draggedId !== stream.id}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] transition-colors duration-200">
       <div className="mx-auto max-w-[1500px] px-3 py-4 sm:px-4 lg:px-5">
-        <header className="mb-4 rounded-[1.4rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3 shadow-[var(--panel-shadow)] backdrop-blur">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <header className="mb-4 rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-3 py-3 shadow-[var(--panel-shadow)] backdrop-blur">
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.24em] text-[var(--muted)]">
+              <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-[var(--muted)]">
                 Twitch + YouTube multiview
               </p>
-              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+              <h1 className="mt-0.5 text-lg font-semibold tracking-tight sm:text-xl">
                 Multistream viewer
               </h1>
             </div>
@@ -690,13 +748,23 @@ export default function App() {
               </button>
 
               <div className="rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[var(--text-soft)]">
-                <div>Streams: <span className="font-semibold text-[var(--text-main)]">{streams.length}</span></div>
-                <div>Audio: <span className="font-semibold text-[var(--text-main)]">{activeId ? "1" : "0"}</span></div>
+                <div>
+                  Streams:{" "}
+                  <span className="font-semibold text-[var(--text-main)]">
+                    {streams.length}
+                  </span>
+                </div>
+                <div>
+                  Audio:{" "}
+                  <span className="font-semibold text-[var(--text-main)]">
+                    {activeId ? "1" : "0"}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="mt-3 flex flex-col gap-2 lg:flex-row">
+          <div className="mt-2 flex flex-col gap-2 lg:flex-row">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -742,11 +810,11 @@ export default function App() {
         </header>
 
         {editingLabelId && (
-          <div className="mb-4 rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-3 shadow-[var(--panel-shadow)]">
+          <div className="mb-4 rounded-[1.1rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-3 shadow-[var(--panel-shadow)]">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-[var(--text-main)]">Rename stream</p>
-              </div>
+              <p className="min-w-0 flex-1 text-sm font-medium text-[var(--text-main)]">
+                Rename stream
+              </p>
 
               <input
                 autoFocus
@@ -781,7 +849,7 @@ export default function App() {
         )}
 
         {!streams.length && (
-          <div className="rounded-[1.2rem] border border-dashed border-[var(--panel-border)] bg-[var(--panel-bg)] p-8 text-center shadow-[var(--panel-shadow)]">
+          <div className="rounded-[1.1rem] border border-dashed border-[var(--panel-border)] bg-[var(--panel-bg)] p-8 text-center shadow-[var(--panel-shadow)]">
             <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)]">
               <LinkIcon className="h-4 w-4 text-[var(--muted)]" />
             </div>
@@ -794,86 +862,28 @@ export default function App() {
 
         {!!streams.length && layoutMode === "focus" && focusedStream && (
           <main className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
-            <div>
-              <StreamCard
-                stream={focusedStream}
-                index={streams.findIndex((stream) => stream.id === focusedStream.id)}
-                total={streams.length}
-                isActive={focusedStream.id === activeId}
-                isFocused={true}
-                onMakeActive={() => setActiveId(focusedStream.id)}
-                onToggleFocus={() => toggleFocus(focusedStream.id)}
-                onRemove={() => removeStream(focusedStream.id)}
-                onMoveLeft={() => moveStreamLeft(focusedStream.id)}
-                onMoveRight={() => moveStreamRight(focusedStream.id)}
-                onStartEditLabel={() => startEditLabel(focusedStream)}
-                audioUnlocked={audioUnlocked}
-              />
-            </div>
+            <div>{renderCard(focusedStream)}</div>
 
-            <div className={`grid ${getGridClasses(secondaryStreams.length, layoutMode)} gap-4 content-start`}>
-              {secondaryStreams.map((stream) => (
-                <StreamCard
-                  key={stream.id}
-                  stream={stream}
-                  index={streams.findIndex((item) => item.id === stream.id)}
-                  total={streams.length}
-                  isActive={stream.id === activeId}
-                  isFocused={false}
-                  onMakeActive={() => setActiveId(stream.id)}
-                  onToggleFocus={() => toggleFocus(stream.id)}
-                  onRemove={() => removeStream(stream.id)}
-                  onMoveLeft={() => moveStreamLeft(stream.id)}
-                  onMoveRight={() => moveStreamRight(stream.id)}
-                  onStartEditLabel={() => startEditLabel(stream)}
-                  audioUnlocked={audioUnlocked}
-                />
-              ))}
+            <div
+              className={`grid ${getGridClasses(
+                secondaryStreams.length,
+                layoutMode
+              )} gap-4 content-start`}
+            >
+              {secondaryStreams.map(renderCard)}
             </div>
           </main>
         )}
 
         {!!streams.length && layoutMode !== "focus" && (
           <main className={`grid ${getGridClasses(streams.length, layoutMode)} gap-4`}>
-            {streams.map((stream, index) => (
-              <StreamCard
-                key={stream.id}
-                stream={stream}
-                index={index}
-                total={streams.length}
-                isActive={stream.id === activeId}
-                isFocused={focusedId === stream.id}
-                onMakeActive={() => setActiveId(stream.id)}
-                onToggleFocus={() => toggleFocus(stream.id)}
-                onRemove={() => removeStream(stream.id)}
-                onMoveLeft={() => moveStreamLeft(stream.id)}
-                onMoveRight={() => moveStreamRight(stream.id)}
-                onStartEditLabel={() => startEditLabel(stream)}
-                audioUnlocked={audioUnlocked}
-              />
-            ))}
+            {streams.map(renderCard)}
           </main>
         )}
 
         {!!streams.length && layoutMode === "focus" && !focusedStream && (
           <main className={`grid ${getGridClasses(streams.length, "side-by-side")} gap-4`}>
-            {streams.map((stream, index) => (
-              <StreamCard
-                key={stream.id}
-                stream={stream}
-                index={index}
-                total={streams.length}
-                isActive={stream.id === activeId}
-                isFocused={false}
-                onMakeActive={() => setActiveId(stream.id)}
-                onToggleFocus={() => toggleFocus(stream.id)}
-                onRemove={() => removeStream(stream.id)}
-                onMoveLeft={() => moveStreamLeft(stream.id)}
-                onMoveRight={() => moveStreamRight(stream.id)}
-                onStartEditLabel={() => startEditLabel(stream)}
-                audioUnlocked={audioUnlocked}
-              />
-            ))}
+            {streams.map(renderCard)}
           </main>
         )}
       </div>
