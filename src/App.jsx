@@ -214,66 +214,66 @@ function StreamCard({
 }) {
   return (
     <article
-      className={`overflow-hidden rounded-3xl border shadow-sm transition duration-200 hover:-translate-y-0.5 ${
+      className={`overflow-hidden rounded-2xl border shadow-sm transition duration-200 ${
         isFocused
-          ? "border-[var(--accent-border)] bg-[var(--card-bg)] ring-2 ring-[var(--accent-soft)]"
+          ? "border-[var(--accent-border)] bg-[var(--card-bg)] ring-1 ring-[var(--accent-soft)]"
           : isActive
           ? "border-[var(--accent-soft)] bg-[var(--card-bg)] ring-1 ring-[var(--accent-soft)]"
           : "border-[var(--card-border)] bg-[var(--card-bg)]"
       }`}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--card-border)] px-4 py-3">
+      <div className="flex items-center justify-between gap-2 border-b border-[var(--card-border)] px-3 py-2">
         <button
           onClick={onMakeActive}
           title="Make this the active audio stream"
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
           {isActive && audioUnlocked ? (
-            <Volume2 className="h-4 w-4 shrink-0 text-[var(--accent-text)]" />
+            <Volume2 className="h-3.5 w-3.5 shrink-0 text-[var(--accent-text)]" />
           ) : (
-            <VolumeX className="h-4 w-4 shrink-0 text-[var(--muted)]" />
+            <VolumeX className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" />
           )}
           <span className="truncate text-sm font-medium text-[var(--text-main)]">
             {getDisplayLabel(stream)}
           </span>
         </button>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <button
             onClick={onMoveLeft}
             disabled={index === 0}
-            className="rounded-xl p-2 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)] disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)] disabled:cursor-not-allowed disabled:opacity-30"
             title="Move earlier"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3.5 w-3.5" />
           </button>
 
           <button
             onClick={onMoveRight}
             disabled={index === total - 1}
-            className="rounded-xl p-2 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)] disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)] disabled:cursor-not-allowed disabled:opacity-30"
             title="Move later"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-3.5 w-3.5" />
           </button>
 
           <button
             onClick={onStartEditLabel}
-            className="rounded-xl p-2 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)]"
+            className="rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)]"
             title="Rename stream"
           >
-            <Pencil className="h-4 w-4" />
+            <Pencil className="h-3.5 w-3.5" />
           </button>
 
           <button
             onClick={onToggleFocus}
-            className="rounded-xl p-2 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)]"
+            className="rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)]"
             title={isFocused ? "Exit focus mode" : "Focus this stream"}
           >
             {isFocused ? (
-              <Minimize2 className="h-4 w-4" />
+              <Minimize2 className="h-3.5 w-3.5" />
             ) : (
-              <Maximize2 className="h-4 w-4" />
+              <Maximize2 className="h-3.5 w-3.5" />
             )}
           </button>
 
@@ -281,18 +281,18 @@ function StreamCard({
             href={stream.raw}
             target="_blank"
             rel="noreferrer"
-            className="rounded-xl p-2 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)]"
+            className="rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)]"
             title="Open original stream"
           >
-            <ExternalLink className="h-4 w-4" />
+            <ExternalLink className="h-3.5 w-3.5" />
           </a>
 
           <button
             onClick={onRemove}
-            className="rounded-xl p-2 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-red-400"
+            className="rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-red-400"
             title="Remove stream"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -305,7 +305,7 @@ function StreamCard({
         />
       </div>
 
-      <div className="flex items-center justify-between px-4 py-3 text-xs text-[var(--muted)]">
+      <div className="flex items-center justify-between px-3 py-2 text-[11px] text-[var(--muted)]">
         <span>{stream.type === "youtube" ? "YouTube" : "Twitch"}</span>
         <span>
           {isFocused
@@ -608,27 +608,27 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] transition-colors duration-200">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <header className="mb-8 rounded-[2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-6 shadow-[var(--panel-shadow)] backdrop-blur">
-          <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="mb-2 text-sm font-medium uppercase tracking-[0.2em] text-[var(--muted)]">
+      <div className="mx-auto max-w-[1400px] px-3 py-5 sm:px-4 lg:px-5">
+        <header className="mb-5 rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-4 shadow-[var(--panel-shadow)] backdrop-blur sm:p-5">
+          <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0">
+              <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.24em] text-[var(--muted)]">
                 Twitch + YouTube multiview
               </p>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                 Watch multiple livestreams on one page
               </h1>
-              <p className="mt-3 max-w-3xl text-sm text-[var(--text-soft)] sm:text-base">
+              <p className="mt-2 max-w-3xl text-sm text-[var(--text-soft)]">
                 Reorder streams, rename them, and share the current view with one link.
               </p>
             </div>
 
-            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-wrap items-stretch gap-2 xl:justify-end">
               <button
                 onClick={copyShareUrl}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-4 text-sm font-medium text-[var(--text-main)] transition hover:opacity-90"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text-main)] transition hover:opacity-90"
               >
-                <Copy className="h-4 w-4" />
+                <Copy className="h-3.5 w-3.5" />
                 Copy share link
               </button>
 
@@ -636,24 +636,24 @@ export default function App() {
                 onClick={() =>
                   setTheme((current) => (current === "dark" ? "light" : "dark"))
                 }
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-4 text-sm font-medium text-[var(--text-main)] transition hover:opacity-90"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text-main)] transition hover:opacity-90"
               >
                 {theme === "dark" ? (
                   <>
-                    <Sun className="h-4 w-4" />
+                    <Sun className="h-3.5 w-3.5" />
                     Light mode
                   </>
                 ) : (
                   <>
-                    <Moon className="h-4 w-4" />
+                    <Moon className="h-3.5 w-3.5" />
                     Dark mode
                   </>
                 )}
               </button>
 
-              <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--text-soft)]">
+              <div className="rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-soft)]">
                 <div className="flex items-center gap-2">
-                  <LayoutGrid className="h-4 w-4" />
+                  <LayoutGrid className="h-3.5 w-3.5" />
                   <span>
                     Streams:{" "}
                     <span className="font-semibold text-[var(--text-main)]">
@@ -661,13 +661,13 @@ export default function App() {
                     </span>
                   </span>
                 </div>
-                <div className="mt-1">
+                <div className="mt-0.5">
                   Active audio:{" "}
                   <span className="font-semibold text-[var(--text-main)]">
                     {activeId ? "1" : "0"}
                   </span>
                 </div>
-                <div className="mt-1">
+                <div className="mt-0.5">
                   Focus mode:{" "}
                   <span className="font-semibold text-[var(--text-main)]">
                     {focusedId ? "On" : "Off"}
@@ -677,62 +677,62 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 lg:flex-row">
+          <div className="flex flex-col gap-2 lg:flex-row">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addStream()}
               placeholder="Paste a YouTube or Twitch stream URL"
-              className="h-12 flex-1 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 text-[var(--text-main)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent-border)]"
+              className="h-10 flex-1 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--text-main)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent-border)]"
             />
             <button
               onClick={addStream}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--button-primary-bg)] px-5 font-medium text-[var(--button-primary-text)] transition hover:opacity-90"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--button-primary-bg)] px-4 text-sm font-medium text-[var(--button-primary-text)] transition hover:opacity-90"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-3.5 w-3.5" />
               Add stream
             </button>
             <button
               onClick={clearAll}
-              className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-5 font-medium text-[var(--text-main)] transition hover:opacity-90"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-4 text-sm font-medium text-[var(--text-main)] transition hover:opacity-90"
             >
               Clear all
             </button>
           </div>
 
           {successMessage ? (
-            <div className="mt-3 rounded-2xl border border-[var(--info-border)] bg-[var(--info-bg)] px-4 py-3 text-sm text-[var(--info-text)]">
+            <div className="mt-2 rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] px-3 py-2 text-sm text-[var(--info-text)]">
               <span className="inline-flex items-center gap-2">
-                <Check className="h-4 w-4" />
+                <Check className="h-3.5 w-3.5" />
                 {successMessage}
               </span>
             </div>
           ) : null}
 
           {error ? (
-            <div className="mt-3 rounded-2xl border border-[var(--note-border)] bg-[var(--note-bg)] px-4 py-3 text-sm text-[var(--note-text)]">
+            <div className="mt-2 rounded-xl border border-[var(--note-border)] bg-[var(--note-bg)] px-3 py-2 text-sm text-[var(--note-text)]">
               {error}
             </div>
           ) : null}
 
           {!audioUnlocked && (
-            <div className="mt-3 rounded-2xl border border-[var(--info-border)] bg-[var(--info-bg)] px-4 py-3 text-sm text-[var(--info-text)]">
+            <div className="mt-2 rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] px-3 py-2 text-sm text-[var(--info-text)]">
               <strong>Audio locked:</strong> click anywhere on the page, then click a
               stream title to enable sound.
             </div>
           )}
 
-          <div className="mt-3 rounded-2xl border border-[var(--note-border)] bg-[var(--note-bg)] px-4 py-3 text-sm text-[var(--note-text)]">
+          <div className="mt-2 rounded-xl border border-[var(--note-border)] bg-[var(--note-bg)] px-3 py-2 text-sm text-[var(--note-text)]">
             <strong>Note:</strong> autoplay with sound is limited by browser rules, so
             streams start muted until the page receives user interaction.
           </div>
         </header>
 
         {editingLabelId && (
-          <div className="mb-5 rounded-[2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-4 shadow-[var(--panel-shadow)]">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="mb-4 rounded-[1.5rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-3 shadow-[var(--panel-shadow)]">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
               <div className="min-w-0 flex-1">
-                <p className="mb-1 text-sm font-medium text-[var(--text-main)]">
+                <p className="mb-0.5 text-sm font-medium text-[var(--text-main)]">
                   Rename stream
                 </p>
                 <p className="text-sm text-[var(--text-soft)]">
@@ -749,22 +749,22 @@ export default function App() {
                   if (e.key === "Escape") cancelEditLabel();
                 }}
                 placeholder="Enter a custom stream name"
-                className="h-11 min-w-0 flex-1 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 text-[var(--text-main)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent-border)]"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--text-main)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent-border)]"
               />
 
               <div className="flex gap-2">
                 <button
                   onClick={() => saveLabel(editingLabelId)}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[var(--button-primary-bg)] px-4 font-medium text-[var(--button-primary-text)] transition hover:opacity-90"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--button-primary-bg)] px-3 font-medium text-[var(--button-primary-text)] transition hover:opacity-90"
                 >
-                  <Check className="h-4 w-4" />
+                  <Check className="h-3.5 w-3.5" />
                   Save
                 </button>
                 <button
                   onClick={cancelEditLabel}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-4 font-medium text-[var(--text-main)] transition hover:opacity-90"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 font-medium text-[var(--text-main)] transition hover:opacity-90"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                   Cancel
                 </button>
               </div>
@@ -773,12 +773,12 @@ export default function App() {
         )}
 
         {!streams.length && (
-          <div className="rounded-[2rem] border border-dashed border-[var(--panel-border)] bg-[var(--panel-bg)] p-12 text-center shadow-[var(--panel-shadow)]">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-[var(--surface-2)]">
-              <LinkIcon className="h-6 w-6 text-[var(--muted)]" />
+          <div className="rounded-[1.5rem] border border-dashed border-[var(--panel-border)] bg-[var(--panel-bg)] p-10 text-center shadow-[var(--panel-shadow)]">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)]">
+              <LinkIcon className="h-5 w-5 text-[var(--muted)]" />
             </div>
-            <h2 className="mt-4 text-2xl font-semibold">No streams added yet</h2>
-            <p className="mx-auto mt-3 max-w-2xl text-[var(--text-soft)]">
+            <h2 className="mt-3 text-xl font-semibold">No streams added yet</h2>
+            <p className="mx-auto mt-2 max-w-2xl text-sm text-[var(--text-soft)]">
               Paste a Twitch or YouTube link above to start building your multiview
               page.
             </p>
@@ -786,7 +786,7 @@ export default function App() {
         )}
 
         {!!streams.length && focusedStream && (
-          <main className="grid grid-cols-1 gap-5 xl:grid-cols-[2fr_1fr]">
+          <main className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
             <div>
               <StreamCard
                 stream={focusedStream}
@@ -805,7 +805,7 @@ export default function App() {
             </div>
 
             <div
-              className={`grid ${getGridClasses(secondaryStreams.length)} gap-5 content-start`}
+              className={`grid ${getGridClasses(secondaryStreams.length)} gap-4 content-start`}
             >
               {secondaryStreams.map((stream) => (
                 <StreamCard
@@ -829,7 +829,7 @@ export default function App() {
         )}
 
         {!!streams.length && !focusedStream && (
-          <main className={`grid ${getGridClasses(streams.length)} gap-5`}>
+          <main className={`grid ${getGridClasses(streams.length)} gap-4`}>
             {streams.map((stream, index) => (
               <StreamCard
                 key={stream.id}
