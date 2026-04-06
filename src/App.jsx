@@ -4,7 +4,9 @@ import {
   LayoutGrid,
   Maximize2,
   Minimize2,
+  Moon,
   Plus,
+  Sun,
   Trash2,
   Volume2,
   VolumeX
@@ -82,32 +84,34 @@ function StreamCard({
 }) {
   return (
     <article
-      className={`overflow-hidden rounded-3xl border bg-white shadow-sm transition hover:shadow-lg ${
+      className={`overflow-hidden rounded-3xl border shadow-sm transition duration-200 hover:-translate-y-0.5 ${
         isFocused
-          ? "border-black ring-2 ring-black/10"
+          ? "border-[var(--accent-border)] bg-[var(--card-bg)] ring-2 ring-[var(--accent-soft)]"
           : isActive
-          ? "border-slate-300 ring-1 ring-slate-200"
-          : "border-black/10"
+          ? "border-[var(--accent-soft)] bg-[var(--card-bg)] ring-1 ring-[var(--accent-soft)]"
+          : "border-[var(--card-border)] bg-[var(--card-bg)]"
       }`}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--card-border)] px-4 py-3">
         <button
           onClick={onMakeActive}
           title="Make this the active audio stream"
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
           {isActive && audioUnlocked ? (
-            <Volume2 className="h-4 w-4 shrink-0" />
+            <Volume2 className="h-4 w-4 shrink-0 text-[var(--accent-text)]" />
           ) : (
-            <VolumeX className="h-4 w-4 shrink-0 text-black/45" />
+            <VolumeX className="h-4 w-4 shrink-0 text-[var(--muted)]" />
           )}
-          <span className="truncate text-sm font-medium">{stream.label}</span>
+          <span className="truncate text-sm font-medium text-[var(--text-main)]">
+            {stream.label}
+          </span>
         </button>
 
         <div className="flex items-center gap-2">
           <button
             onClick={onToggleFocus}
-            className="rounded-xl p-2 text-black/60 transition hover:bg-black/5 hover:text-black"
+            className="rounded-xl p-2 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)]"
             title={isFocused ? "Exit focus mode" : "Focus this stream"}
           >
             {isFocused ? (
@@ -121,7 +125,7 @@ function StreamCard({
             href={stream.raw}
             target="_blank"
             rel="noreferrer"
-            className="rounded-xl p-2 text-black/60 transition hover:bg-black/5 hover:text-black"
+            className="rounded-xl p-2 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)]"
             title="Open original stream"
           >
             <ExternalLink className="h-4 w-4" />
@@ -129,7 +133,7 @@ function StreamCard({
 
           <button
             onClick={onRemove}
-            className="rounded-xl p-2 text-black/60 transition hover:bg-black/5 hover:text-red-600"
+            className="rounded-xl p-2 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-red-400"
             title="Remove stream"
           >
             <Trash2 className="h-4 w-4" />
@@ -145,7 +149,7 @@ function StreamCard({
         />
       </div>
 
-      <div className="flex items-center justify-between px-4 py-3 text-xs text-black/55">
+      <div className="flex items-center justify-between px-4 py-3 text-xs text-[var(--muted)]">
         <span>{stream.type === "youtube" ? "YouTube" : "Twitch"}</span>
         <span>
           {isFocused
@@ -163,6 +167,13 @@ export default function App() {
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("multiview-theme") || "dark";
+    } catch {
+      return "dark";
+    }
+  });
 
   const [streams, setStreams] = useState(() => {
     try {
@@ -206,6 +217,13 @@ export default function App() {
       return "demo-yt";
     }
   });
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem("multiview-theme", theme);
+    } catch {}
+  }, [theme]);
 
   useEffect(() => {
     const unlock = () => {
@@ -305,37 +323,62 @@ export default function App() {
   }, [streams, focusedId]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] transition-colors duration-200">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <header className="mb-8 rounded-[2rem] border border-black/10 bg-white p-6 shadow-sm">
+        <header className="mb-8 rounded-[2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-6 shadow-[var(--panel-shadow)] backdrop-blur">
           <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="mb-2 text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
+              <p className="mb-2 text-sm font-medium uppercase tracking-[0.2em] text-[var(--muted)]">
                 Twitch + YouTube multiview
               </p>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                 Watch multiple livestreams on one page
               </h1>
-              <p className="mt-3 max-w-3xl text-sm text-slate-600 sm:text-base">
-                Click a stream title to switch audio. Use the expand button to make
-                one stream the main focus.
+              <p className="mt-3 max-w-3xl text-sm text-[var(--text-soft)] sm:text-base">
+                Dark by default, built for keeping multiple streams open without the
+                page feeling harsh or noisy.
               </p>
             </div>
 
-            <div className="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-700">
-              <div className="flex items-center gap-2">
-                <LayoutGrid className="h-4 w-4" />
-                <span>
-                  Streams: <span className="font-semibold">{streams.length}</span>
-                </span>
-              </div>
-              <div className="mt-1">
-                Active audio:{" "}
-                <span className="font-semibold">{activeId ? "1" : "0"}</span>
-              </div>
-              <div className="mt-1">
-                Focus mode:{" "}
-                <span className="font-semibold">{focusedId ? "On" : "Off"}</span>
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+              <button
+                onClick={() =>
+                  setTheme((current) => (current === "dark" ? "light" : "dark"))
+                }
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-4 text-sm font-medium text-[var(--text-main)] transition hover:opacity-90"
+              >
+                {theme === "dark" ? (
+                  <>
+                    <Sun className="h-4 w-4" />
+                    Light mode
+                  </>
+                ) : (
+                  <>
+                    <Moon className="h-4 w-4" />
+                    Dark mode
+                  </>
+                )}
+              </button>
+
+              <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--text-soft)]">
+                <div className="flex items-center gap-2">
+                  <LayoutGrid className="h-4 w-4" />
+                  <span>
+                    Streams: <span className="font-semibold text-[var(--text-main)]">{streams.length}</span>
+                  </span>
+                </div>
+                <div className="mt-1">
+                  Active audio:{" "}
+                  <span className="font-semibold text-[var(--text-main)]">
+                    {activeId ? "1" : "0"}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  Focus mode:{" "}
+                  <span className="font-semibold text-[var(--text-main)]">
+                    {focusedId ? "On" : "Off"}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -346,42 +389,44 @@ export default function App() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addStream()}
               placeholder="Paste a YouTube or Twitch stream URL"
-              className="h-12 flex-1 rounded-2xl border border-slate-200 bg-white px-4 outline-none transition focus:border-slate-400"
+              className="h-12 flex-1 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 text-[var(--text-main)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent-border)]"
             />
             <button
               onClick={addStream}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-black px-5 font-medium text-white transition hover:opacity-90"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--button-primary-bg)] px-5 font-medium text-[var(--button-primary-text)] transition hover:opacity-90"
             >
               <Plus className="h-4 w-4" />
               Add stream
             </button>
             <button
               onClick={clearAll}
-              className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 font-medium text-slate-700 transition hover:bg-slate-50"
+              className="inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-5 font-medium text-[var(--text-main)] transition hover:opacity-90"
             >
               Clear all
             </button>
           </div>
 
-          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+          {error ? (
+            <p className="mt-3 text-sm text-[var(--danger-text)]">{error}</p>
+          ) : null}
 
           {!audioUnlocked && (
-            <div className="mt-5 rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            <div className="mt-5 rounded-2xl border border-[var(--info-border)] bg-[var(--info-bg)] px-4 py-3 text-sm text-[var(--info-text)]">
               <strong>Audio locked:</strong> click anywhere on the page, then click a
               stream title to enable sound.
             </div>
           )}
 
-          <div className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="mt-3 rounded-2xl border border-[var(--note-border)] bg-[var(--note-bg)] px-4 py-3 text-sm text-[var(--note-text)]">
             <strong>Note:</strong> autoplay with sound is limited by browser rules, so
             streams start muted until the page receives user interaction.
           </div>
         </header>
 
         {!streams.length && (
-          <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-12 text-center shadow-sm">
+          <div className="rounded-[2rem] border border-dashed border-[var(--panel-border)] bg-[var(--panel-bg)] p-12 text-center shadow-[var(--panel-shadow)]">
             <h2 className="text-2xl font-semibold">No streams added yet</h2>
-            <p className="mx-auto mt-3 max-w-2xl text-slate-600">
+            <p className="mx-auto mt-3 max-w-2xl text-[var(--text-soft)]">
               Paste a Twitch or YouTube link above to start building your multiview
               page.
             </p>
