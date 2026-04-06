@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { memo, useEffect, useRef } from "react";
 
 let youtubeApiPromise;
 let twitchApiPromise;
@@ -67,18 +67,32 @@ function loadTwitchApi() {
   return twitchApiPromise;
 }
 
-export default function StreamPlayer({ stream, isActive, audioUnlocked }) {
+function StreamPlayerInner({ stream, isActive, audioUnlocked }) {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
   const readyRef = useRef(false);
+  const lastAudioStateRef = useRef(null);
+  const streamKeyRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
     const container = containerRef.current;
     if (!container) return;
 
+    const streamKey = `${stream.type}:${stream.sourceId}`;
+
+    if (streamKeyRef.current === streamKey && playerRef.current) {
+      return;
+    }
+
+    streamKeyRef.current = streamKey;
     readyRef.current = false;
-    container.innerHTML = "";
+    lastAudioStateRef.current = null;
+
+    if (containerRef.current) {
+      containerRef.current.innerHTML = "";
+    }
+
     playerRef.current = null;
 
     async function initYouTube() {
@@ -90,7 +104,7 @@ export default function StreamPlayer({ stream, isActive, audioUnlocked }) {
       mount.className = "youtube-player h-full w-full";
       containerRef.current.appendChild(mount);
 
-      playerRef.current = new YT.Player(mount.id, {
+      const player = new YT.Player(mount.id, {
         width: "100%",
         height: "100%",
         videoId: stream.sourceId,
@@ -102,22 +116,30 @@ export default function StreamPlayer({ stream, isActive, audioUnlocked }) {
         },
         events: {
           onReady: (event) => {
-            readyRef.current = true;
+            if (cancelled) return;
 
-            if (isActive && audioUnlocked) {
-              try {
+            playerRef.current = event.target;
+            readyRef.current = true;
+            lastAudioStateRef.current = null;
+
+            const shouldBeAudible = isActive && audioUnlocked;
+
+            try {
+              if (shouldBeAudible) {
                 event.target.unMute();
                 event.target.setVolume(100);
                 event.target.playVideo();
-              } catch {}
-            } else {
-              try {
+              } else {
                 event.target.mute();
-              } catch {}
-            }
+              }
+            } catch {}
+
+            lastAudioStateRef.current = shouldBeAudible;
           }
         }
       });
+
+      playerRef.current = player;
     }
 
     async function initTwitch() {
@@ -147,14 +169,21 @@ export default function StreamPlayer({ stream, isActive, audioUnlocked }) {
       playerRef.current = player;
 
       const markReady = () => {
+        if (cancelled) return;
+
         readyRef.current = true;
+        lastAudioStateRef.current = null;
+
+        const shouldBeAudible = isActive && audioUnlocked;
 
         try {
-          player.setMuted(!(isActive && audioUnlocked));
-          if (isActive && audioUnlocked) {
+          player.setMuted(!shouldBeAudible);
+          if (shouldBeAudible) {
             player.play?.();
           }
         } catch {}
+
+        lastAudioStateRef.current = shouldBeAudible;
       };
 
       if (typeof player.addEventListener === "function") {
@@ -172,7 +201,41 @@ export default function StreamPlayer({ stream, isActive, audioUnlocked }) {
 
     return () => {
       cancelled = true;
+    };
+  }, [stream.id, stream.type, stream.sourceId, audioUnlocked, isActive]);
 
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player || !readyRef.current) return;
+
+    const shouldBeAudible = isActive && audioUnlocked;
+
+    if (lastAudioStateRef.current === shouldBeAudible) {
+      return;
+    }
+
+    try {
+      if (stream.type === "youtube") {
+        if (shouldBeAudible) {
+          player.unMute?.();
+          player.setVolume?.(100);
+          player.playVideo?.();
+        } else {
+          player.mute?.();
+        }
+      } else {
+        player.setMuted?.(!shouldBeAudible);
+        if (shouldBeAudible) {
+          player.play?.();
+        }
+      }
+
+      lastAudioStateRef.current = shouldBeAudible;
+    } catch {}
+  }, [isActive, audioUnlocked, stream.type]);
+
+  useEffect(() => {
+    return () => {
       try {
         if (stream.type === "youtube" && playerRef.current?.destroy) {
           playerRef.current.destroy();
@@ -185,29 +248,19 @@ export default function StreamPlayer({ stream, isActive, audioUnlocked }) {
         }
       } catch {}
     };
-  }, [stream]);
-
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!player || !readyRef.current) return;
-
-    try {
-      if (stream.type === "youtube") {
-        if (isActive && audioUnlocked) {
-          player.unMute?.();
-          player.setVolume?.(100);
-          player.playVideo?.();
-        } else {
-          player.mute?.();
-        }
-      } else {
-        player.setMuted?.(!(isActive && audioUnlocked));
-        if (isActive && audioUnlocked) {
-          player.play?.();
-        }
-      }
-    } catch {}
-  }, [isActive, audioUnlocked, stream.type]);
+  }, [stream.type]);
 
   return <div ref={containerRef} className="stream-player-root h-full w-full" />;
 }
+
+const StreamPlayer = memo(
+  StreamPlayerInner,
+  (prevProps, nextProps) =>
+    prevProps.stream.id === nextProps.stream.id &&
+    prevProps.stream.type === nextProps.stream.type &&
+    prevProps.stream.sourceId === nextProps.stream.sourceId &&
+    prevProps.isActive === nextProps.isActive &&
+    prevProps.audioUnlocked === nextProps.audioUnlocked
+);
+
+export default StreamPlayer;
