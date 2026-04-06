@@ -19,8 +19,9 @@ import {
   VolumeX,
   X
 } from "lucide-react";
-import { Responsive, WidthProvider } from "react-grid-layout";
+import { Responsive, WidthProvider } from "react-grid-layout/legacy";
 import StreamPlayer from "./StreamPlayer";
+
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
