@@ -103,7 +103,7 @@ function moveItem(array, fromIndex, toIndex) {
   return copy;
 }
 
-function encodeShareState(streams, activeId, focusedId, layoutMode) {
+function encodeShareState(streams, focusedId, layoutMode, audibleIds) {
   const compactStreams = streams.map((stream) => ({
     t: stream.type,
     s: stream.sourceId,
@@ -111,14 +111,16 @@ function encodeShareState(streams, activeId, focusedId, layoutMode) {
     c: stream.customLabel || ""
   }));
 
-  const activeIndex = streams.findIndex((stream) => stream.id === activeId);
   const focusedIndex = streams.findIndex((stream) => stream.id === focusedId);
+  const audibleIndices = streams
+    .map((stream, index) => (audibleIds.includes(stream.id) ? index : -1))
+    .filter((index) => index !== -1);
 
   const payload = {
     streams: compactStreams,
-    activeIndex,
     focusedIndex,
-    layoutMode
+    layoutMode,
+    audibleIndices
   };
 
   return btoa(encodeURIComponent(JSON.stringify(payload)));
@@ -161,13 +163,6 @@ function decodeShareState(encoded) {
 
     if (!streams.length) return null;
 
-    const safeActiveIndex =
-      typeof decoded.activeIndex === "number" &&
-      decoded.activeIndex >= 0 &&
-      decoded.activeIndex < streams.length
-        ? decoded.activeIndex
-        : 0;
-
     const safeFocusedIndex =
       typeof decoded.focusedIndex === "number" &&
       decoded.focusedIndex >= 0 &&
@@ -182,11 +177,20 @@ function decodeShareState(encoded) {
         ? decoded.layoutMode
         : "focus";
 
+    const audibleIds = Array.isArray(decoded.audibleIndices)
+      ? decoded.audibleIndices
+          .filter(
+            (index) =>
+              typeof index === "number" && index >= 0 && index < streams.length
+          )
+          .map((index) => streams[index].id)
+      : [];
+
     return {
       streams,
-      activeId: streams[safeActiveIndex]?.id || streams[0].id,
       focusedId: streams[safeFocusedIndex]?.id || streams[0].id,
-      layoutMode
+      layoutMode,
+      audibleIds
     };
   } catch {
     return null;
@@ -207,11 +211,7 @@ function getMainGridClasses(layoutMode) {
 
 function getCardPlacementClasses(layoutMode, isFocused) {
   if (layoutMode !== "focus") return "";
-
-  if (isFocused) {
-    return "xl:col-span-2 xl:row-span-2";
-  }
-
+  if (isFocused) return "xl:col-span-2 xl:row-span-2";
   return "";
 }
 
@@ -249,9 +249,9 @@ function LayoutToggle({ layoutMode, setLayoutMode }) {
 
 function StreamCard({
   stream,
-  isActive,
+  isAudible,
   isFocused,
-  onMakeActive,
+  onToggleAudio,
   onToggleFocus,
   onRemove,
   onStartEditLabel,
@@ -273,7 +273,7 @@ function StreamCard({
       className={`overflow-hidden rounded-2xl border shadow-sm transition duration-150 ${
         isFocused
           ? "border-[var(--accent-border)] bg-[var(--card-bg)] ring-1 ring-[var(--accent-soft)]"
-          : isActive
+          : isAudible
           ? "border-[var(--accent-soft)] bg-[var(--card-bg)] ring-1 ring-[var(--accent-soft)]"
           : "border-[var(--card-border)] bg-[var(--card-bg)]"
       } ${isDragging ? "opacity-50" : ""} ${
@@ -290,11 +290,11 @@ function StreamCard({
           </div>
 
           <button
-            onClick={onMakeActive}
-            title="Make this the active audio stream"
+            onClick={onToggleAudio}
+            title={isAudible ? "Mute this stream" : "Unmute this stream"}
             className="flex min-w-0 flex-1 items-center gap-2 text-left"
           >
-            {isActive && audioUnlocked ? (
+            {isAudible && audioUnlocked ? (
               <Volume2 className="h-3.5 w-3.5 shrink-0 text-[var(--accent-text)]" />
             ) : (
               <VolumeX className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" />
@@ -349,7 +349,7 @@ function StreamCard({
       <div className="aspect-video bg-black">
         <StreamPlayer
           stream={stream}
-          isActive={isActive}
+          isAudible={isAudible}
           audioUnlocked={audioUnlocked}
         />
       </div>
@@ -357,11 +357,7 @@ function StreamCard({
       <div className="flex items-center justify-between px-3 py-2 text-[11px] text-[var(--muted)]">
         <span>{stream.type === "youtube" ? "YouTube" : "Twitch"}</span>
         <span>
-          {isFocused
-            ? "Focused"
-            : isActive && audioUnlocked
-            ? "Audio active"
-            : "Muted"}
+          {isFocused ? "Focused" : isAudible && audioUnlocked ? "Audible" : "Muted"}
         </span>
       </div>
     </article>
@@ -436,21 +432,22 @@ export default function App() {
     }
   });
 
-  const [activeId, setActiveId] = useState(() => {
-    if (sharedFromUrl?.activeId) return sharedFromUrl.activeId;
-    try {
-      return localStorage.getItem("multiview-active-id") || "demo-yt";
-    } catch {
-      return "demo-yt";
-    }
-  });
-
   const [focusedId, setFocusedId] = useState(() => {
     if (sharedFromUrl?.focusedId) return sharedFromUrl.focusedId;
     try {
       return localStorage.getItem("multiview-focused-id") || "demo-yt";
     } catch {
       return "demo-yt";
+    }
+  });
+
+  const [audibleIds, setAudibleIds] = useState(() => {
+    if (sharedFromUrl?.audibleIds) return sharedFromUrl.audibleIds;
+    try {
+      const stored = localStorage.getItem("multiview-audible-ids");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
     }
   });
 
@@ -491,28 +488,23 @@ export default function App() {
 
   useEffect(() => {
     try {
-      if (activeId) localStorage.setItem("multiview-active-id", activeId);
-      else localStorage.removeItem("multiview-active-id");
-    } catch {}
-  }, [activeId]);
-
-  useEffect(() => {
-    try {
       if (focusedId) localStorage.setItem("multiview-focused-id", focusedId);
       else localStorage.removeItem("multiview-focused-id");
     } catch {}
   }, [focusedId]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem("multiview-audible-ids", JSON.stringify(audibleIds));
+    } catch {}
+  }, [audibleIds]);
+
+  useEffect(() => {
     if (!streams.length) {
-      setActiveId(null);
       setFocusedId(null);
       setEditingLabelId(null);
+      setAudibleIds([]);
       return;
-    }
-
-    if (!streams.some((stream) => stream.id === activeId)) {
-      setActiveId(streams[0].id);
     }
 
     if (focusedId && !streams.some((stream) => stream.id === focusedId)) {
@@ -523,7 +515,11 @@ export default function App() {
       setEditingLabelId(null);
       setEditingLabelValue("");
     }
-  }, [streams, activeId, focusedId, editingLabelId]);
+
+    setAudibleIds((current) =>
+      current.filter((id) => streams.some((stream) => stream.id === id))
+    );
+  }, [streams, focusedId, editingLabelId]);
 
   useEffect(() => {
     if (!successMessage) return;
@@ -556,13 +552,11 @@ export default function App() {
 
     if (duplicate) {
       setError(`That stream is already added as "${getDisplayLabel(duplicate)}".`);
-      setActiveId(duplicate.id);
       setFocusedId(duplicate.id);
       return;
     }
 
     setStreams((current) => [...current, parsed]);
-    setActiveId(parsed.id);
     setFocusedId(parsed.id);
     setInput("");
     setSuccessMessage("Stream added.");
@@ -570,6 +564,8 @@ export default function App() {
 
   function removeStream(id) {
     setStreams((current) => current.filter((stream) => stream.id !== id));
+    setAudibleIds((current) => current.filter((value) => value !== id));
+
     if (editingLabelId === id) {
       setEditingLabelId(null);
       setEditingLabelValue("");
@@ -578,8 +574,8 @@ export default function App() {
 
   function clearAll() {
     setStreams([]);
-    setActiveId(null);
     setFocusedId(null);
+    setAudibleIds([]);
     setEditingLabelId(null);
     setEditingLabelValue("");
     setSuccessMessage("");
@@ -588,6 +584,12 @@ export default function App() {
 
   function toggleFocus(id) {
     setFocusedId((current) => (current === id ? null : id));
+  }
+
+  function toggleAudio(id) {
+    setAudibleIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]
+    );
   }
 
   function startEditLabel(stream) {
@@ -670,7 +672,12 @@ export default function App() {
     }
 
     try {
-      const encoded = encodeShareState(streams, activeId, focusedId, layoutMode);
+      const encoded = encodeShareState(
+        streams,
+        focusedId,
+        layoutMode,
+        audibleIds
+      );
       const url = `${window.location.origin}${window.location.pathname}?view=${encoded}`;
       await navigator.clipboard.writeText(url);
       setError("");
@@ -693,6 +700,7 @@ export default function App() {
 
   function renderCard(stream) {
     const isFocused = focusedId === stream.id;
+    const isAudible = audibleIds.includes(stream.id);
 
     return (
       <div
@@ -701,9 +709,9 @@ export default function App() {
       >
         <StreamCard
           stream={stream}
-          isActive={stream.id === activeId}
+          isAudible={isAudible}
           isFocused={isFocused}
-          onMakeActive={() => setActiveId(stream.id)}
+          onToggleAudio={() => toggleAudio(stream.id)}
           onToggleFocus={() => toggleFocus(stream.id)}
           onRemove={() => removeStream(stream.id)}
           onStartEditLabel={() => startEditLabel(stream)}
@@ -771,9 +779,9 @@ export default function App() {
                   </span>
                 </div>
                 <div>
-                  Audio:{" "}
+                  Audible:{" "}
                   <span className="font-semibold text-[var(--text-main)]">
-                    {activeId ? "1" : "0"}
+                    {audibleIds.length}
                   </span>
                 </div>
               </div>
@@ -820,7 +828,7 @@ export default function App() {
 
           {!audioUnlocked && (
             <div className="mt-2 rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] px-3 py-2 text-xs text-[var(--info-text)]">
-              Click anywhere, then click a stream title to enable sound.
+              Click anywhere first, then toggle audio on any stream you want.
             </div>
           )}
         </header>
