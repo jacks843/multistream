@@ -41,18 +41,18 @@ function loadTwitchApi() {
   if (twitchApiPromise) return twitchApiPromise;
 
   twitchApiPromise = new Promise((resolve, reject) => {
-    if (window.Twitch?.Embed || window.Twitch?.Player) {
+    if (window.Twitch?.Player) {
       resolve(window.Twitch);
       return;
     }
 
     const existing = document.querySelector(
-      'script[src="https://embed.twitch.tv/embed/v1.js"]'
+      'script[src="https://player.twitch.tv/js/embed/v1.js"]'
     );
 
     if (!existing) {
       const tag = document.createElement("script");
-      tag.src = "https://embed.twitch.tv/embed/v1.js";
+      tag.src = "https://player.twitch.tv/js/embed/v1.js";
       tag.onload = () => resolve(window.Twitch);
       tag.onerror = reject;
       document.body.appendChild(tag);
@@ -120,40 +120,49 @@ export default function StreamPlayer({ stream, isActive, audioUnlocked }) {
       });
     }
 
-async function initTwitch() {
-  const Twitch = await loadTwitchApi();
-  if (cancelled || !containerRef.current) return;
+    async function initTwitch() {
+      const Twitch = await loadTwitchApi();
+      if (cancelled || !containerRef.current) return;
 
-  const mount = document.createElement("div");
-  mount.id = `twitch-player-${stream.id}`;
-  containerRef.current.appendChild(mount);
+      const mount = document.createElement("div");
+      mount.id = `twitch-player-${stream.id}`;
+      mount.className = "twitch-player h-full w-full";
+      containerRef.current.appendChild(mount);
 
-  const options = {
-    width: "100%",
-    height: "100%",
-    parent: [getTwitchParent()],
-    autoplay: true,
-    muted: !(isActive && audioUnlocked)
-  };
+      const options = {
+        width: "100%",
+        height: "100%",
+        parent: [getTwitchParent()],
+        autoplay: true,
+        muted: !(isActive && audioUnlocked)
+      };
 
-  if (stream.type === "twitch-channel") {
-    options.channel = stream.sourceId;
-  } else {
-    options.video = `v${stream.sourceId}`;
-  }
+      if (stream.type === "twitch-channel") {
+        options.channel = stream.sourceId;
+      } else {
+        options.video = `v${stream.sourceId}`;
+      }
 
-  const player = new Twitch.Player(mount.id, options);
+      const player = new Twitch.Player(mount.id, options);
+      playerRef.current = player;
 
-  playerRef.current = player;
-  readyRef.current = true;
+      const markReady = () => {
+        readyRef.current = true;
 
-  try {
-    player.setMuted(!(isActive && audioUnlocked));
-    if (isActive && audioUnlocked) {
-      player.play?.();
+        try {
+          player.setMuted(!(isActive && audioUnlocked));
+          if (isActive && audioUnlocked) {
+            player.play?.();
+          }
+        } catch {}
+      };
+
+      if (typeof player.addEventListener === "function") {
+        player.addEventListener(Twitch.Player.READY, markReady);
+      } else {
+        markReady();
+      }
     }
-  } catch {}
-}
 
     if (stream.type === "youtube") {
       initYouTube();
@@ -176,7 +185,7 @@ async function initTwitch() {
         }
       } catch {}
     };
-  }, [stream, isActive, audioUnlocked]);
+  }, [stream]);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -200,5 +209,5 @@ async function initTwitch() {
     } catch {}
   }, [isActive, audioUnlocked, stream.type]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return <div ref={containerRef} className="stream-player-root h-full w-full" />;
 }

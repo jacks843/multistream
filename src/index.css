@@ -101,8 +101,17 @@ body {
   display: block;
 }
 
-#root .twitch-embed,
-#root .youtube-player {
+.stream-player-root,
+.stream-player-root > div,
+.stream-player-root > div > iframe,
+.twitch-player,
+.youtube-player {
   width: 100%;
   height: 100%;
+}
+
+.stream-player-root iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
 }
