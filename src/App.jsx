@@ -19,7 +19,13 @@ import {
   VolumeX,
   X
 } from "lucide-react";
+import { Responsive, WidthProvider } from "react-grid-layout";
 import StreamPlayer from "./StreamPlayer";
+
+const ResponsiveGridLayout = WidthProvider(Responsive);
+
+const BREAKPOINTS = { lg: 1200, md: 900, sm: 640, xs: 0 };
+const COLS = { lg: 12, md: 8, sm: 4, xs: 2 };
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -96,14 +102,7 @@ function getDisplayLabel(stream) {
   return stream.defaultLabel || stream.label || "Stream";
 }
 
-function moveItem(array, fromIndex, toIndex) {
-  const copy = [...array];
-  const [item] = copy.splice(fromIndex, 1);
-  copy.splice(toIndex, 0, item);
-  return copy;
-}
-
-function encodeShareState(streams, focusedId, layoutMode, audibleIds) {
+function encodeShareState(streams, focusedId, audibleIds, layoutMode, layouts) {
   const compactStreams = streams.map((stream) => ({
     t: stream.type,
     s: stream.sourceId,
@@ -119,8 +118,9 @@ function encodeShareState(streams, focusedId, layoutMode, audibleIds) {
   const payload = {
     streams: compactStreams,
     focusedIndex,
+    audibleIndices,
     layoutMode,
-    audibleIndices
+    layouts
   };
 
   return btoa(encodeURIComponent(JSON.stringify(payload)));
@@ -170,13 +170,6 @@ function decodeShareState(encoded) {
         ? decoded.focusedIndex
         : 0;
 
-    const layoutMode =
-      decoded.layoutMode === "side-by-side" ||
-      decoded.layoutMode === "stacked" ||
-      decoded.layoutMode === "focus"
-        ? decoded.layoutMode
-        : "focus";
-
     const audibleIds = Array.isArray(decoded.audibleIndices)
       ? decoded.audibleIndices
           .filter(
@@ -186,38 +179,231 @@ function decodeShareState(encoded) {
           .map((index) => streams[index].id)
       : [];
 
+    const layoutMode =
+      decoded.layoutMode === "resizable" ||
+      decoded.layoutMode === "side-by-side" ||
+      decoded.layoutMode === "stacked"
+        ? decoded.layoutMode
+        : "resizable";
+
     return {
       streams,
       focusedId: streams[safeFocusedIndex]?.id || streams[0].id,
+      audibleIds,
       layoutMode,
-      audibleIds
+      layouts: decoded.layouts || null
     };
   } catch {
     return null;
   }
 }
 
-function getMainGridClasses(layoutMode) {
+function buildBaseLayout(streams, layoutMode) {
+  if (!streams.length) {
+    return { lg: [], md: [], sm: [], xs: [] };
+  }
+
+  const presets = {
+    resizable: {
+      lg: streams.map((stream, index) => ({
+        i: stream.id,
+        x: (index % 2) * 6,
+        y: Math.floor(index / 2) * 4,
+        w: 6,
+        h: 4
+      })),
+      md: streams.map((stream, index) => ({
+        i: stream.id,
+        x: (index % 2) * 4,
+        y: Math.floor(index / 2) * 4,
+        w: 4,
+        h: 4
+      })),
+      sm: streams.map((stream, index) => ({
+        i: stream.id,
+        x: 0,
+        y: index * 4,
+        w: 4,
+        h: 4
+      })),
+      xs: streams.map((stream, index) => ({
+        i: stream.id,
+        x: 0,
+        y: index * 4,
+        w: 2,
+        h: 4
+      }))
+    },
+    "side-by-side": {
+      lg: streams.map((stream, index) => ({
+        i: stream.id,
+        x: (index % 2) * 6,
+        y: Math.floor(index / 2) * 4,
+        w: 6,
+        h: 4,
+        static: false
+      })),
+      md: streams.map((stream, index) => ({
+        i: stream.id,
+        x: (index % 2) * 4,
+        y: Math.floor(index / 2) * 4,
+        w: 4,
+        h: 4
+      })),
+      sm: streams.map((stream, index) => ({
+        i: stream.id,
+        x: 0,
+        y: index * 4,
+        w: 4,
+        h: 4
+      })),
+      xs: streams.map((stream, index) => ({
+        i: stream.id,
+        x: 0,
+        y: index * 4,
+        w: 2,
+        h: 4
+      }))
+    },
+    stacked: {
+      lg: streams.map((stream, index) => ({
+        i: stream.id,
+        x: 0,
+        y: index * 4,
+        w: 12,
+        h: 4
+      })),
+      md: streams.map((stream, index) => ({
+        i: stream.id,
+        x: 0,
+        y: index * 4,
+        w: 8,
+        h: 4
+      })),
+      sm: streams.map((stream, index) => ({
+        i: stream.id,
+        x: 0,
+        y: index * 4,
+        w: 4,
+        h: 4
+      })),
+      xs: streams.map((stream, index) => ({
+        i: stream.id,
+        x: 0,
+        y: index * 4,
+        w: 2,
+        h: 4
+      }))
+    }
+  };
+
+  return presets[layoutMode] || presets.resizable;
+}
+
+function mergeLayoutsWithStreams(existingLayouts, streams, layoutMode) {
+  const base = buildBaseLayout(streams, layoutMode);
+  const next = {};
+
+  for (const bp of Object.keys(COLS)) {
+    const existing = Array.isArray(existingLayouts?.[bp]) ? existingLayouts[bp] : [];
+    const existingMap = new Map(existing.map((item) => [item.i, item]));
+    next[bp] = base[bp].map((baseItem) => {
+      const prev = existingMap.get(baseItem.i);
+      if (!prev) return baseItem;
+      return {
+        ...baseItem,
+        ...prev,
+        i: baseItem.i
+      };
+    });
+  }
+
+  return next;
+}
+
+function applyPresetToLayouts(streams, focusedId, layoutMode, currentLayouts) {
+  if (layoutMode === "resizable") {
+    return mergeLayoutsWithStreams(currentLayouts, streams, layoutMode);
+  }
+
   if (layoutMode === "stacked") {
-    return "grid grid-cols-1 gap-4";
+    return buildBaseLayout(streams, "stacked");
   }
 
   if (layoutMode === "side-by-side") {
-    return "grid grid-cols-1 gap-4 md:grid-cols-2";
+    return buildBaseLayout(streams, "side-by-side");
   }
 
-  return "grid grid-cols-1 gap-4 xl:grid-cols-3";
+  return mergeLayoutsWithStreams(currentLayouts, streams, "resizable");
 }
 
-function getCardPlacementClasses(layoutMode, isFocused) {
-  if (layoutMode !== "focus") return "";
-  if (isFocused) return "xl:col-span-2 xl:row-span-2";
-  return "";
+function focusifyLayouts(layouts, focusedId) {
+  if (!focusedId) return layouts;
+
+  const next = {};
+
+  for (const bp of Object.keys(COLS)) {
+    const cols = COLS[bp];
+    next[bp] = (layouts[bp] || []).map((item, index) => {
+      if (item.i === focusedId) {
+        const width = cols >= 12 ? 8 : cols >= 8 ? 5 : cols;
+        const height = 6;
+        return {
+          ...item,
+          x: 0,
+          y: 0,
+          w: width,
+          h: height
+        };
+      }
+
+      const focusedWidth = cols >= 12 ? 8 : cols >= 8 ? 5 : cols;
+      const rightX = Math.min(focusedWidth, cols - 1);
+      const width = cols >= 12 ? 4 : cols >= 8 ? 3 : cols;
+      const yOffset = Math.max(0, index - 1);
+
+      return {
+        ...item,
+        x: cols > focusedWidth ? rightX : 0,
+        y: cols > focusedWidth ? yOffset * 3 : (index + 1) * 3,
+        w: cols > focusedWidth ? Math.min(width, cols - rightX) : cols,
+        h: 3
+      };
+    });
+  }
+
+  return next;
+}
+
+function reorderLayoutsAfterDrag(streams, layouts) {
+  const next = {};
+
+  for (const bp of Object.keys(COLS)) {
+    const map = new Map((layouts[bp] || []).map((item) => [item.i, item]));
+    next[bp] = streams
+      .map((stream, index) => {
+        const item = map.get(stream.id);
+        if (item) return item;
+
+        const cols = COLS[bp];
+        const width = cols >= 12 ? 6 : cols >= 8 ? 4 : cols;
+        return {
+          i: stream.id,
+          x: 0,
+          y: index * 4,
+          w: width,
+          h: 4
+        };
+      })
+      .filter(Boolean);
+  }
+
+  return next;
 }
 
 function LayoutToggle({ layoutMode, setLayoutMode }) {
   const options = [
-    { key: "focus", label: "Focus", icon: LayoutGrid },
+    { key: "resizable", label: "Free", icon: LayoutGrid },
     { key: "side-by-side", label: "Side by side", icon: Columns2 },
     { key: "stacked", label: "Stacked", icon: Rows3 }
   ];
@@ -255,32 +441,19 @@ function StreamCard({
   onToggleFocus,
   onRemove,
   onStartEditLabel,
-  audioUnlocked,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
-  isDragging,
-  isDragTarget
+  audioUnlocked
 }) {
   return (
     <article
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
-      className={`overflow-hidden rounded-2xl border shadow-sm transition duration-150 ${
+      className={`h-full overflow-hidden rounded-2xl border shadow-sm transition duration-150 ${
         isFocused
           ? "border-[var(--accent-border)] bg-[var(--card-bg)] ring-1 ring-[var(--accent-soft)]"
           : isAudible
           ? "border-[var(--accent-soft)] bg-[var(--card-bg)] ring-1 ring-[var(--accent-soft)]"
           : "border-[var(--card-border)] bg-[var(--card-bg)]"
-      } ${isDragging ? "opacity-50" : ""} ${
-        isDragTarget ? "ring-2 ring-[var(--accent-soft)]" : ""
       }`}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-[var(--card-border)] px-3 py-2">
+      <div className="drag-handle flex items-center justify-between gap-2 border-b border-[var(--card-border)] px-3 py-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <div
             className="cursor-grab rounded-lg p-1.5 text-[var(--muted)] active:cursor-grabbing"
@@ -317,7 +490,7 @@ function StreamCard({
           <button
             onClick={onToggleFocus}
             className="rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-main)]"
-            title={isFocused ? "Exit focus mode" : "Focus this stream"}
+            title={isFocused ? "Exit focus sizing" : "Emphasise this stream"}
           >
             {isFocused ? (
               <Minimize2 className="h-3.5 w-3.5" />
@@ -346,7 +519,7 @@ function StreamCard({
         </div>
       </div>
 
-      <div className="aspect-video bg-black">
+      <div className="h-[calc(100%-68px)] min-h-[160px] bg-black">
         <StreamPlayer
           stream={stream}
           isAudible={isAudible}
@@ -379,8 +552,6 @@ export default function App() {
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [editingLabelId, setEditingLabelId] = useState(null);
   const [editingLabelValue, setEditingLabelValue] = useState("");
-  const [draggedId, setDraggedId] = useState(null);
-  const [dragOverId, setDragOverId] = useState(null);
 
   const [theme, setTheme] = useState(() => {
     try {
@@ -393,9 +564,9 @@ export default function App() {
   const [layoutMode, setLayoutMode] = useState(() => {
     if (sharedFromUrl?.layoutMode) return sharedFromUrl.layoutMode;
     try {
-      return localStorage.getItem("multiview-layout-mode") || "focus";
+      return localStorage.getItem("multiview-layout-mode") || "resizable";
     } catch {
-      return "focus";
+      return "resizable";
     }
   });
 
@@ -451,6 +622,20 @@ export default function App() {
     }
   });
 
+  const [layouts, setLayouts] = useState(() => {
+    if (sharedFromUrl?.layouts) {
+      return mergeLayoutsWithStreams(sharedFromUrl.layouts, sharedFromUrl.streams, "resizable");
+    }
+
+    try {
+      const stored = localStorage.getItem("multiview-grid-layouts");
+      const parsed = stored ? JSON.parse(stored) : null;
+      return mergeLayoutsWithStreams(parsed, streams, "resizable");
+    } catch {
+      return buildBaseLayout(streams, "resizable");
+    }
+  });
+
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     try {
@@ -463,6 +648,12 @@ export default function App() {
       localStorage.setItem("multiview-layout-mode", layoutMode);
     } catch {}
   }, [layoutMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("multiview-grid-layouts", JSON.stringify(layouts));
+    } catch {}
+  }, [layouts]);
 
   useEffect(() => {
     const unlock = () => {
@@ -498,6 +689,10 @@ export default function App() {
       localStorage.setItem("multiview-audible-ids", JSON.stringify(audibleIds));
     } catch {}
   }, [audibleIds]);
+
+  useEffect(() => {
+    setLayouts((current) => mergeLayoutsWithStreams(current, streams, "resizable"));
+  }, [streams]);
 
   useEffect(() => {
     if (!streams.length) {
@@ -580,6 +775,7 @@ export default function App() {
     setEditingLabelValue("");
     setSuccessMessage("");
     setError("");
+    setLayouts(buildBaseLayout([], "resizable"));
   }
 
   function toggleFocus(id) {
@@ -615,56 +811,6 @@ export default function App() {
     setEditingLabelValue("");
   }
 
-  function handleDragStart(id) {
-    return (event) => {
-      setDraggedId(id);
-      setDragOverId(id);
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", id);
-    };
-  }
-
-  function handleDragOver(id) {
-    return (event) => {
-      event.preventDefault();
-      if (dragOverId !== id) {
-        setDragOverId(id);
-      }
-    };
-  }
-
-  function handleDrop(id) {
-    return (event) => {
-      event.preventDefault();
-
-      const sourceId = draggedId || event.dataTransfer.getData("text/plain");
-      if (!sourceId || sourceId === id) {
-        setDraggedId(null);
-        setDragOverId(null);
-        return;
-      }
-
-      setStreams((current) => {
-        const fromIndex = current.findIndex((stream) => stream.id === sourceId);
-        const toIndex = current.findIndex((stream) => stream.id === id);
-
-        if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
-          return current;
-        }
-
-        return moveItem(current, fromIndex, toIndex);
-      });
-
-      setDraggedId(null);
-      setDragOverId(null);
-    };
-  }
-
-  function handleDragEnd() {
-    setDraggedId(null);
-    setDragOverId(null);
-  }
-
   async function copyShareUrl() {
     if (!streams.length) {
       setError("Add at least one stream before creating a share link.");
@@ -675,8 +821,9 @@ export default function App() {
       const encoded = encodeShareState(
         streams,
         focusedId,
+        audibleIds,
         layoutMode,
-        audibleIds
+        layouts
       );
       const url = `${window.location.origin}${window.location.pathname}?view=${encoded}`;
       await navigator.clipboard.writeText(url);
@@ -687,45 +834,31 @@ export default function App() {
     }
   }
 
-  const orderedStreams = useMemo(() => {
-    if (layoutMode !== "focus" || !focusedId) {
-      return streams;
-    }
+  function handleLayoutChange(_currentLayout, allLayouts) {
+    setLayouts(allLayouts);
+  }
 
-    const focusedIndex = streams.findIndex((stream) => stream.id === focusedId);
-    if (focusedIndex <= 0) return streams;
-
-    return moveItem(streams, focusedIndex, 0);
-  }, [streams, layoutMode, focusedId]);
-
-  function renderCard(stream) {
-    const isFocused = focusedId === stream.id;
-    const isAudible = audibleIds.includes(stream.id);
-
-    return (
-      <div
-        key={stream.id}
-        className={getCardPlacementClasses(layoutMode, isFocused)}
-      >
-        <StreamCard
-          stream={stream}
-          isAudible={isAudible}
-          isFocused={isFocused}
-          onToggleAudio={() => toggleAudio(stream.id)}
-          onToggleFocus={() => toggleFocus(stream.id)}
-          onRemove={() => removeStream(stream.id)}
-          onStartEditLabel={() => startEditLabel(stream)}
-          audioUnlocked={audioUnlocked}
-          onDragStart={handleDragStart(stream.id)}
-          onDragOver={handleDragOver(stream.id)}
-          onDrop={handleDrop(stream.id)}
-          onDragEnd={handleDragEnd}
-          isDragging={draggedId === stream.id}
-          isDragTarget={dragOverId === stream.id && draggedId !== stream.id}
-        />
-      </div>
+  function handlePresetChange(mode) {
+    setLayoutMode(mode);
+    setLayouts((current) =>
+      applyPresetToLayouts(streams, focusedId, mode, current)
     );
   }
+
+  const effectiveLayouts = useMemo(() => {
+    if (layoutMode === "resizable") {
+      return layouts;
+    }
+
+    if (layoutMode === "side-by-side" || layoutMode === "stacked") {
+      return applyPresetToLayouts(streams, focusedId, layoutMode, layouts);
+    }
+
+    return focusifyLayouts(
+      applyPresetToLayouts(streams, focusedId, "resizable", layouts),
+      focusedId
+    );
+  }, [layouts, layoutMode, streams, focusedId]);
 
   return (
     <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] transition-colors duration-200">
@@ -742,7 +875,7 @@ export default function App() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <LayoutToggle layoutMode={layoutMode} setLayoutMode={setLayoutMode} />
+              <LayoutToggle layoutMode={layoutMode} setLayoutMode={handlePresetChange} />
 
               <button
                 onClick={copyShareUrl}
@@ -885,9 +1018,36 @@ export default function App() {
         )}
 
         {!!streams.length && (
-          <main className={getMainGridClasses(layoutMode)}>
-            {orderedStreams.map(renderCard)}
-          </main>
+          <ResponsiveGridLayout
+            className="multistream-grid"
+            layouts={effectiveLayouts}
+            breakpoints={BREAKPOINTS}
+            cols={COLS}
+            rowHeight={90}
+            margin={[16, 16]}
+            containerPadding={[0, 0]}
+            isResizable={true}
+            isDraggable={true}
+            draggableHandle=".drag-handle"
+            compactType="vertical"
+            preventCollision={false}
+            onLayoutChange={handleLayoutChange}
+          >
+            {streams.map((stream) => (
+              <div key={stream.id} className="overflow-hidden">
+                <StreamCard
+                  stream={stream}
+                  isAudible={audibleIds.includes(stream.id)}
+                  isFocused={focusedId === stream.id}
+                  onToggleAudio={() => toggleAudio(stream.id)}
+                  onToggleFocus={() => toggleFocus(stream.id)}
+                  onRemove={() => removeStream(stream.id)}
+                  onStartEditLabel={() => startEditLabel(stream)}
+                  audioUnlocked={audioUnlocked}
+                />
+              </div>
+            ))}
+          </ResponsiveGridLayout>
         )}
       </div>
     </div>
