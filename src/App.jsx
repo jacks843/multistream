@@ -193,17 +193,26 @@ function decodeShareState(encoded) {
   }
 }
 
-function getGridClasses(count, layoutMode) {
-  if (layoutMode === "stacked") return "grid-cols-1";
-  if (layoutMode === "side-by-side") {
-    if (count <= 1) return "grid-cols-1";
-    return "grid-cols-1 md:grid-cols-2";
+function getMainGridClasses(layoutMode) {
+  if (layoutMode === "stacked") {
+    return "grid grid-cols-1 gap-4";
   }
 
-  if (count <= 1) return "grid-cols-1";
-  if (count === 2) return "grid-cols-1 md:grid-cols-2";
-  if (count <= 4) return "grid-cols-1 md:grid-cols-2";
-  return "grid-cols-1 md:grid-cols-2";
+  if (layoutMode === "side-by-side") {
+    return "grid grid-cols-1 gap-4 md:grid-cols-2";
+  }
+
+  return "grid grid-cols-1 gap-4 xl:grid-cols-3";
+}
+
+function getCardPlacementClasses(layoutMode, isFocused) {
+  if (layoutMode !== "focus") return "";
+
+  if (isFocused) {
+    return "xl:col-span-2 xl:row-span-2";
+  }
+
+  return "";
 }
 
 function LayoutToggle({ layoutMode, setLayoutMode }) {
@@ -671,35 +680,42 @@ export default function App() {
     }
   }
 
-  const focusedStream = useMemo(() => {
-    if (!focusedId) return null;
-    return streams.find((stream) => stream.id === focusedId) || null;
-  }, [streams, focusedId]);
+  const orderedStreams = useMemo(() => {
+    if (layoutMode !== "focus" || !focusedId) {
+      return streams;
+    }
 
-  const secondaryStreams = useMemo(() => {
-    if (!focusedId) return streams;
-    return streams.filter((stream) => stream.id !== focusedId);
-  }, [streams, focusedId]);
+    const focusedIndex = streams.findIndex((stream) => stream.id === focusedId);
+    if (focusedIndex <= 0) return streams;
+
+    return moveItem(streams, focusedIndex, 0);
+  }, [streams, layoutMode, focusedId]);
 
   function renderCard(stream) {
+    const isFocused = focusedId === stream.id;
+
     return (
-      <StreamCard
+      <div
         key={stream.id}
-        stream={stream}
-        isActive={stream.id === activeId}
-        isFocused={focusedId === stream.id}
-        onMakeActive={() => setActiveId(stream.id)}
-        onToggleFocus={() => toggleFocus(stream.id)}
-        onRemove={() => removeStream(stream.id)}
-        onStartEditLabel={() => startEditLabel(stream)}
-        audioUnlocked={audioUnlocked}
-        onDragStart={handleDragStart(stream.id)}
-        onDragOver={handleDragOver(stream.id)}
-        onDrop={handleDrop(stream.id)}
-        onDragEnd={handleDragEnd}
-        isDragging={draggedId === stream.id}
-        isDragTarget={dragOverId === stream.id && draggedId !== stream.id}
-      />
+        className={getCardPlacementClasses(layoutMode, isFocused)}
+      >
+        <StreamCard
+          stream={stream}
+          isActive={stream.id === activeId}
+          isFocused={isFocused}
+          onMakeActive={() => setActiveId(stream.id)}
+          onToggleFocus={() => toggleFocus(stream.id)}
+          onRemove={() => removeStream(stream.id)}
+          onStartEditLabel={() => startEditLabel(stream)}
+          audioUnlocked={audioUnlocked}
+          onDragStart={handleDragStart(stream.id)}
+          onDragOver={handleDragOver(stream.id)}
+          onDrop={handleDrop(stream.id)}
+          onDragEnd={handleDragEnd}
+          isDragging={draggedId === stream.id}
+          isDragTarget={dragOverId === stream.id && draggedId !== stream.id}
+        />
+      </div>
     );
   }
 
@@ -860,30 +876,9 @@ export default function App() {
           </div>
         )}
 
-        {!!streams.length && layoutMode === "focus" && focusedStream && (
-          <main className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
-            <div>{renderCard(focusedStream)}</div>
-
-            <div
-              className={`grid ${getGridClasses(
-                secondaryStreams.length,
-                layoutMode
-              )} gap-4 content-start`}
-            >
-              {secondaryStreams.map(renderCard)}
-            </div>
-          </main>
-        )}
-
-        {!!streams.length && layoutMode !== "focus" && (
-          <main className={`grid ${getGridClasses(streams.length, layoutMode)} gap-4`}>
-            {streams.map(renderCard)}
-          </main>
-        )}
-
-        {!!streams.length && layoutMode === "focus" && !focusedStream && (
-          <main className={`grid ${getGridClasses(streams.length, "side-by-side")} gap-4`}>
-            {streams.map(renderCard)}
+        {!!streams.length && (
+          <main className={getMainGridClasses(layoutMode)}>
+            {orderedStreams.map(renderCard)}
           </main>
         )}
       </div>
