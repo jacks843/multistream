@@ -17,7 +17,10 @@ function loadYouTubeApi() {
       return;
     }
 
-    const existing = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+    const existing = document.querySelector(
+      'script[src="https://www.youtube.com/iframe_api"]'
+    );
+
     if (!existing) {
       const tag = document.createElement("script");
       tag.src = "https://www.youtube.com/iframe_api";
@@ -43,7 +46,10 @@ function loadTwitchApi() {
       return;
     }
 
-    const existing = document.querySelector('script[src="https://embed.twitch.tv/embed/v1.js"]');
+    const existing = document.querySelector(
+      'script[src="https://embed.twitch.tv/embed/v1.js"]'
+    );
+
     if (!existing) {
       const tag = document.createElement("script");
       tag.src = "https://embed.twitch.tv/embed/v1.js";
@@ -53,13 +59,15 @@ function loadTwitchApi() {
       return;
     }
 
-    existing.addEventListener("load", () => resolve(window.Twitch), { once: true });
+    existing.addEventListener("load", () => resolve(window.Twitch), {
+      once: true
+    });
   });
 
   return twitchApiPromise;
 }
 
-export default function StreamPlayer({ stream, isActive }) {
+export default function StreamPlayer({ stream, isActive, audioUnlocked }) {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
   const readyRef = useRef(false);
@@ -79,9 +87,12 @@ export default function StreamPlayer({ stream, isActive }) {
 
       const mount = document.createElement("div");
       mount.id = `yt-player-${stream.id}`;
+      mount.className = "youtube-player h-full w-full";
       containerRef.current.appendChild(mount);
 
       playerRef.current = new YT.Player(mount.id, {
+        width: "100%",
+        height: "100%",
         videoId: stream.sourceId,
         playerVars: {
           autoplay: 1,
@@ -92,12 +103,17 @@ export default function StreamPlayer({ stream, isActive }) {
         events: {
           onReady: (event) => {
             readyRef.current = true;
-            if (isActive) {
-              event.target.unMute();
-              event.target.setVolume(100);
-              event.target.playVideo();
+
+            if (isActive && audioUnlocked) {
+              try {
+                event.target.unMute();
+                event.target.setVolume(100);
+                event.target.playVideo();
+              } catch {}
             } else {
-              event.target.mute();
+              try {
+                event.target.mute();
+              } catch {}
             }
           }
         }
@@ -113,7 +129,7 @@ export default function StreamPlayer({ stream, isActive }) {
         height: "100%",
         parent: [getTwitchParent()],
         autoplay: true,
-        muted: !isActive
+        muted: !(isActive && audioUnlocked)
       };
 
       if (stream.type === "twitch-channel") {
@@ -126,18 +142,17 @@ export default function StreamPlayer({ stream, isActive }) {
 
       embed.addEventListener(Twitch.Embed.VIDEO_READY, () => {
         if (cancelled) return;
+
         const player = embed.getPlayer();
         playerRef.current = player;
         readyRef.current = true;
 
-        if (isActive) {
-          player.setMuted(false);
-          try {
-            player.play();
-          } catch {}
-        } else {
-          player.setMuted(true);
-        }
+        try {
+          player.setMuted(!(isActive && audioUnlocked));
+          if (isActive && audioUnlocked) {
+            player.play?.();
+          }
+        } catch {}
       });
     }
 
@@ -162,7 +177,7 @@ export default function StreamPlayer({ stream, isActive }) {
         }
       } catch {}
     };
-  }, [stream]);
+  }, [stream, isActive, audioUnlocked]);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -170,7 +185,7 @@ export default function StreamPlayer({ stream, isActive }) {
 
     try {
       if (stream.type === "youtube") {
-        if (isActive) {
+        if (isActive && audioUnlocked) {
           player.unMute?.();
           player.setVolume?.(100);
           player.playVideo?.();
@@ -178,15 +193,13 @@ export default function StreamPlayer({ stream, isActive }) {
           player.mute?.();
         }
       } else {
-        player.setMuted?.(!isActive);
-        if (isActive) {
-          try {
-            player.play?.();
-          } catch {}
+        player.setMuted?.(!(isActive && audioUnlocked));
+        if (isActive && audioUnlocked) {
+          player.play?.();
         }
       }
     } catch {}
-  }, [isActive, stream.type]);
+  }, [isActive, audioUnlocked, stream.type]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }

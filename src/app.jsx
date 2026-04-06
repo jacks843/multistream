@@ -77,7 +77,8 @@ function StreamCard({
   isFocused,
   onMakeActive,
   onToggleFocus,
-  onRemove
+  onRemove,
+  audioUnlocked
 }) {
   return (
     <article
@@ -95,7 +96,7 @@ function StreamCard({
           title="Make this the active audio stream"
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
-          {isActive ? (
+          {isActive && audioUnlocked ? (
             <Volume2 className="h-4 w-4 shrink-0" />
           ) : (
             <VolumeX className="h-4 w-4 shrink-0 text-black/45" />
@@ -137,13 +138,21 @@ function StreamCard({
       </div>
 
       <div className="aspect-video bg-black">
-        <StreamPlayer stream={stream} isActive={isActive} />
+        <StreamPlayer
+          stream={stream}
+          isActive={isActive}
+          audioUnlocked={audioUnlocked}
+        />
       </div>
 
       <div className="flex items-center justify-between px-4 py-3 text-xs text-black/55">
         <span>{stream.type === "youtube" ? "YouTube" : "Twitch"}</span>
         <span>
-          {isFocused ? "Focused" : isActive ? "Audio active" : "Muted"}
+          {isFocused
+            ? "Focused"
+            : isActive && audioUnlocked
+            ? "Audio active"
+            : "Muted"}
         </span>
       </div>
     </article>
@@ -153,6 +162,7 @@ function StreamCard({
 export default function App() {
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   const [streams, setStreams] = useState(() => {
     try {
@@ -198,6 +208,22 @@ export default function App() {
   });
 
   useEffect(() => {
+    const unlock = () => {
+      setAudioUnlocked(true);
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  useEffect(() => {
     try {
       localStorage.setItem("multiview-streams", JSON.stringify(streams));
     } catch {}
@@ -234,7 +260,7 @@ export default function App() {
       setActiveId(streams[0].id);
     }
 
-    if (!streams.some((stream) => stream.id === focusedId)) {
+    if (focusedId && !streams.some((stream) => stream.id === focusedId)) {
       setFocusedId(streams[0].id);
     }
   }, [streams, activeId, focusedId]);
@@ -268,15 +294,15 @@ export default function App() {
     setFocusedId((current) => (current === id ? null : id));
   }
 
-  const focusedStream = useMemo(
-    () => streams.find((stream) => stream.id === focusedId) || null,
-    [streams, focusedId]
-  );
+  const focusedStream = useMemo(() => {
+    if (!focusedId) return null;
+    return streams.find((stream) => stream.id === focusedId) || null;
+  }, [streams, focusedId]);
 
-  const secondaryStreams = useMemo(
-    () => streams.filter((stream) => stream.id !== focusedId),
-    [streams, focusedId]
-  );
+  const secondaryStreams = useMemo(() => {
+    if (!focusedId) return streams;
+    return streams.filter((stream) => stream.id !== focusedId);
+  }, [streams, focusedId]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -304,10 +330,12 @@ export default function App() {
                 </span>
               </div>
               <div className="mt-1">
-                Active audio: <span className="font-semibold">{activeId ? "1" : "0"}</span>
+                Active audio:{" "}
+                <span className="font-semibold">{activeId ? "1" : "0"}</span>
               </div>
               <div className="mt-1">
-                Focus mode: <span className="font-semibold">{focusedId ? "On" : "Off"}</span>
+                Focus mode:{" "}
+                <span className="font-semibold">{focusedId ? "On" : "Off"}</span>
               </div>
             </div>
           </div>
@@ -337,9 +365,16 @@ export default function App() {
 
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
 
-          <div className="mt-5 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <strong>Note:</strong> YouTube and Twitch audio still depend on browser
-            autoplay rules, so the first sound change may need a click.
+          {!audioUnlocked && (
+            <div className="mt-5 rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
+              <strong>Audio locked:</strong> click anywhere on the page, then click a
+              stream title to enable sound.
+            </div>
+          )}
+
+          <div className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <strong>Note:</strong> autoplay with sound is limited by browser rules, so
+            streams start muted until the page receives user interaction.
           </div>
         </header>
 
@@ -363,10 +398,13 @@ export default function App() {
                 onMakeActive={() => setActiveId(focusedStream.id)}
                 onToggleFocus={() => toggleFocus(focusedStream.id)}
                 onRemove={() => removeStream(focusedStream.id)}
+                audioUnlocked={audioUnlocked}
               />
             </div>
 
-            <div className={`grid ${getGridClasses(secondaryStreams.length)} gap-5 content-start`}>
+            <div
+              className={`grid ${getGridClasses(secondaryStreams.length)} gap-5 content-start`}
+            >
               {secondaryStreams.map((stream) => (
                 <StreamCard
                   key={stream.id}
@@ -376,6 +414,7 @@ export default function App() {
                   onMakeActive={() => setActiveId(stream.id)}
                   onToggleFocus={() => toggleFocus(stream.id)}
                   onRemove={() => removeStream(stream.id)}
+                  audioUnlocked={audioUnlocked}
                 />
               ))}
             </div>
@@ -393,6 +432,7 @@ export default function App() {
                 onMakeActive={() => setActiveId(stream.id)}
                 onToggleFocus={() => toggleFocus(stream.id)}
                 onRemove={() => removeStream(stream.id)}
+                audioUnlocked={audioUnlocked}
               />
             ))}
           </main>
