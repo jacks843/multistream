@@ -120,41 +120,40 @@ export default function StreamPlayer({ stream, isActive, audioUnlocked }) {
       });
     }
 
-    async function initTwitch() {
-      const Twitch = await loadTwitchApi();
-      if (cancelled || !containerRef.current) return;
+async function initTwitch() {
+  const Twitch = await loadTwitchApi();
+  if (cancelled || !containerRef.current) return;
 
-      const options = {
-        width: "100%",
-        height: "100%",
-        parent: [getTwitchParent()],
-        autoplay: true,
-        muted: !(isActive && audioUnlocked)
-      };
+  const mount = document.createElement("div");
+  mount.id = `twitch-player-${stream.id}`;
+  containerRef.current.appendChild(mount);
 
-      if (stream.type === "twitch-channel") {
-        options.channel = stream.sourceId;
-      } else {
-        options.video = `v${stream.sourceId}`;
-      }
+  const options = {
+    width: "100%",
+    height: "100%",
+    parent: [getTwitchParent()],
+    autoplay: true,
+    muted: !(isActive && audioUnlocked)
+  };
 
-      const embed = new Twitch.Embed(containerRef.current, options);
+  if (stream.type === "twitch-channel") {
+    options.channel = stream.sourceId;
+  } else {
+    options.video = `v${stream.sourceId}`;
+  }
 
-      embed.addEventListener(Twitch.Embed.VIDEO_READY, () => {
-        if (cancelled) return;
+  const player = new Twitch.Player(mount.id, options);
 
-        const player = embed.getPlayer();
-        playerRef.current = player;
-        readyRef.current = true;
+  playerRef.current = player;
+  readyRef.current = true;
 
-        try {
-          player.setMuted(!(isActive && audioUnlocked));
-          if (isActive && audioUnlocked) {
-            player.play?.();
-          }
-        } catch {}
-      });
+  try {
+    player.setMuted(!(isActive && audioUnlocked));
+    if (isActive && audioUnlocked) {
+      player.play?.();
     }
+  } catch {}
+}
 
     if (stream.type === "youtube") {
       initYouTube();
