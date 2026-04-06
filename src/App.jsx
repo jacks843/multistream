@@ -3,6 +3,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Columns2,
   Copy,
   ExternalLink,
   LayoutGrid,
@@ -12,6 +13,7 @@ import {
   Moon,
   Pencil,
   Plus,
+  Rows3,
   Sun,
   Trash2,
   Volume2,
@@ -27,11 +29,7 @@ function createId() {
 function normalizeUrl(input) {
   const trimmed = input.trim();
   if (!trimmed) return "";
-
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
-  }
-
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
 }
 
@@ -93,13 +91,6 @@ function parseStream(input) {
   return null;
 }
 
-function getGridClasses(count) {
-  if (count <= 1) return "grid-cols-1";
-  if (count === 2) return "grid-cols-1 md:grid-cols-2";
-  if (count <= 4) return "grid-cols-1 md:grid-cols-2";
-  return "grid-cols-1 md:grid-cols-2";
-}
-
 function getDisplayLabel(stream) {
   const custom = (stream.customLabel || "").trim();
   if (custom) return custom;
@@ -113,7 +104,7 @@ function moveItem(array, fromIndex, toIndex) {
   return copy;
 }
 
-function encodeShareState(streams, activeId, focusedId) {
+function encodeShareState(streams, activeId, focusedId, layoutMode) {
   const compactStreams = streams.map((stream) => ({
     t: stream.type,
     s: stream.sourceId,
@@ -127,7 +118,8 @@ function encodeShareState(streams, activeId, focusedId) {
   const payload = {
     streams: compactStreams,
     activeIndex,
-    focusedIndex
+    focusedIndex,
+    layoutMode
   };
 
   return btoa(encodeURIComponent(JSON.stringify(payload)));
@@ -147,13 +139,9 @@ function decodeShareState(encoded) {
 
         let defaultLabel = "Stream";
 
-        if (item.t === "youtube") {
-          defaultLabel = `YouTube · ${item.s}`;
-        } else if (item.t === "twitch-channel") {
-          defaultLabel = `Twitch · ${item.s}`;
-        } else if (item.t === "twitch-video") {
-          defaultLabel = `Twitch VOD · ${item.s}`;
-        }
+        if (item.t === "youtube") defaultLabel = `YouTube · ${item.s}`;
+        else if (item.t === "twitch-channel") defaultLabel = `Twitch · ${item.s}`;
+        else if (item.t === "twitch-video") defaultLabel = `Twitch VOD · ${item.s}`;
 
         return {
           id: createId(),
@@ -188,14 +176,67 @@ function decodeShareState(encoded) {
         ? decoded.focusedIndex
         : 0;
 
+    const layoutMode =
+      decoded.layoutMode === "side-by-side" ||
+      decoded.layoutMode === "stacked" ||
+      decoded.layoutMode === "focus"
+        ? decoded.layoutMode
+        : "focus";
+
     return {
       streams,
       activeId: streams[safeActiveIndex]?.id || streams[0].id,
-      focusedId: streams[safeFocusedIndex]?.id || streams[0].id
+      focusedId: streams[safeFocusedIndex]?.id || streams[0].id,
+      layoutMode
     };
   } catch {
     return null;
   }
+}
+
+function getGridClasses(count, layoutMode) {
+  if (layoutMode === "stacked") return "grid-cols-1";
+  if (layoutMode === "side-by-side") {
+    if (count <= 1) return "grid-cols-1";
+    return "grid-cols-1 md:grid-cols-2";
+  }
+
+  if (count <= 1) return "grid-cols-1";
+  if (count === 2) return "grid-cols-1 md:grid-cols-2";
+  if (count <= 4) return "grid-cols-1 md:grid-cols-2";
+  return "grid-cols-1 md:grid-cols-2";
+}
+
+function LayoutToggle({ layoutMode, setLayoutMode }) {
+  const options = [
+    { key: "focus", label: "Focus", icon: LayoutGrid },
+    { key: "side-by-side", label: "Side by side", icon: Columns2 },
+    { key: "stacked", label: "Stacked", icon: Rows3 }
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] p-1">
+      {options.map((option) => {
+        const Icon = option.icon;
+        const active = layoutMode === option.key;
+
+        return (
+          <button
+            key={option.key}
+            onClick={() => setLayoutMode(option.key)}
+            className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition ${
+              active
+                ? "bg-[var(--button-primary-bg)] text-[var(--button-primary-text)]"
+                : "text-[var(--text-main)] hover:bg-[var(--card-bg)]"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function StreamCard({
@@ -342,10 +383,17 @@ export default function App() {
     }
   });
 
-  const [streams, setStreams] = useState(() => {
-    if (sharedFromUrl?.streams?.length) {
-      return sharedFromUrl.streams;
+  const [layoutMode, setLayoutMode] = useState(() => {
+    if (sharedFromUrl?.layoutMode) return sharedFromUrl.layoutMode;
+    try {
+      return localStorage.getItem("multiview-layout-mode") || "focus";
+    } catch {
+      return "focus";
     }
+  });
+
+  const [streams, setStreams] = useState(() => {
+    if (sharedFromUrl?.streams?.length) return sharedFromUrl.streams;
 
     try {
       const stored = localStorage.getItem("multiview-streams");
@@ -379,7 +427,6 @@ export default function App() {
 
   const [activeId, setActiveId] = useState(() => {
     if (sharedFromUrl?.activeId) return sharedFromUrl.activeId;
-
     try {
       return localStorage.getItem("multiview-active-id") || "demo-yt";
     } catch {
@@ -389,7 +436,6 @@ export default function App() {
 
   const [focusedId, setFocusedId] = useState(() => {
     if (sharedFromUrl?.focusedId) return sharedFromUrl.focusedId;
-
     try {
       return localStorage.getItem("multiview-focused-id") || "demo-yt";
     } catch {
@@ -403,6 +449,12 @@ export default function App() {
       localStorage.setItem("multiview-theme", theme);
     } catch {}
   }, [theme]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("multiview-layout-mode", layoutMode);
+    } catch {}
+  }, [layoutMode]);
 
   useEffect(() => {
     const unlock = () => {
@@ -428,21 +480,15 @@ export default function App() {
 
   useEffect(() => {
     try {
-      if (activeId) {
-        localStorage.setItem("multiview-active-id", activeId);
-      } else {
-        localStorage.removeItem("multiview-active-id");
-      }
+      if (activeId) localStorage.setItem("multiview-active-id", activeId);
+      else localStorage.removeItem("multiview-active-id");
     } catch {}
   }, [activeId]);
 
   useEffect(() => {
     try {
-      if (focusedId) {
-        localStorage.setItem("multiview-focused-id", focusedId);
-      } else {
-        localStorage.removeItem("multiview-focused-id");
-      }
+      if (focusedId) localStorage.setItem("multiview-focused-id", focusedId);
+      else localStorage.removeItem("multiview-focused-id");
     } catch {}
   }, [focusedId]);
 
@@ -470,11 +516,7 @@ export default function App() {
 
   useEffect(() => {
     if (!successMessage) return;
-
-    const timeout = window.setTimeout(() => {
-      setSuccessMessage("");
-    }, 2200);
-
+    const timeout = window.setTimeout(() => setSuccessMessage(""), 2200);
     return () => window.clearTimeout(timeout);
   }, [successMessage]);
 
@@ -562,10 +604,7 @@ export default function App() {
     setStreams((current) =>
       current.map((stream) =>
         stream.id === id
-          ? {
-              ...stream,
-              customLabel: editingLabelValue.trim()
-            }
+          ? { ...stream, customLabel: editingLabelValue.trim() }
           : stream
       )
     );
@@ -586,7 +625,7 @@ export default function App() {
     }
 
     try {
-      const encoded = encodeShareState(streams, activeId, focusedId);
+      const encoded = encodeShareState(streams, activeId, focusedId, layoutMode);
       const url = `${window.location.origin}${window.location.pathname}?view=${encoded}`;
       await navigator.clipboard.writeText(url);
       setError("");
@@ -608,100 +647,80 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] transition-colors duration-200">
-      <div className="mx-auto max-w-[1400px] px-3 py-5 sm:px-4 lg:px-5">
-        <header className="mb-5 rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-4 shadow-[var(--panel-shadow)] backdrop-blur sm:p-5">
-          <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+      <div className="mx-auto max-w-[1500px] px-3 py-4 sm:px-4 lg:px-5">
+        <header className="mb-4 rounded-[1.4rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3 shadow-[var(--panel-shadow)] backdrop-blur">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.24em] text-[var(--muted)]">
+              <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.24em] text-[var(--muted)]">
                 Twitch + YouTube multiview
               </p>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Watch multiple livestreams on one page
+              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                Multistream viewer
               </h1>
-              <p className="mt-2 max-w-3xl text-sm text-[var(--text-soft)]">
-                Reorder streams, rename them, and share the current view with one link.
-              </p>
             </div>
 
-            <div className="flex flex-wrap items-stretch gap-2 xl:justify-end">
+            <div className="flex flex-wrap items-center gap-2">
+              <LayoutToggle layoutMode={layoutMode} setLayoutMode={setLayoutMode} />
+
               <button
                 onClick={copyShareUrl}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text-main)] transition hover:opacity-90"
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 text-xs font-medium text-[var(--text-main)] transition hover:opacity-90"
               >
                 <Copy className="h-3.5 w-3.5" />
-                Copy share link
+                Share
               </button>
 
               <button
                 onClick={() =>
                   setTheme((current) => (current === "dark" ? "light" : "dark"))
                 }
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text-main)] transition hover:opacity-90"
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 text-xs font-medium text-[var(--text-main)] transition hover:opacity-90"
               >
                 {theme === "dark" ? (
                   <>
                     <Sun className="h-3.5 w-3.5" />
-                    Light mode
+                    Light
                   </>
                 ) : (
                   <>
                     <Moon className="h-3.5 w-3.5" />
-                    Dark mode
+                    Dark
                   </>
                 )}
               </button>
 
-              <div className="rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-soft)]">
-                <div className="flex items-center gap-2">
-                  <LayoutGrid className="h-3.5 w-3.5" />
-                  <span>
-                    Streams:{" "}
-                    <span className="font-semibold text-[var(--text-main)]">
-                      {streams.length}
-                    </span>
-                  </span>
-                </div>
-                <div className="mt-0.5">
-                  Active audio:{" "}
-                  <span className="font-semibold text-[var(--text-main)]">
-                    {activeId ? "1" : "0"}
-                  </span>
-                </div>
-                <div className="mt-0.5">
-                  Focus mode:{" "}
-                  <span className="font-semibold text-[var(--text-main)]">
-                    {focusedId ? "On" : "Off"}
-                  </span>
-                </div>
+              <div className="rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[var(--text-soft)]">
+                <div>Streams: <span className="font-semibold text-[var(--text-main)]">{streams.length}</span></div>
+                <div>Audio: <span className="font-semibold text-[var(--text-main)]">{activeId ? "1" : "0"}</span></div>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 lg:flex-row">
+          <div className="mt-3 flex flex-col gap-2 lg:flex-row">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addStream()}
               placeholder="Paste a YouTube or Twitch stream URL"
-              className="h-10 flex-1 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--text-main)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent-border)]"
+              className="h-9 flex-1 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--text-main)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent-border)]"
             />
             <button
               onClick={addStream}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--button-primary-bg)] px-4 text-sm font-medium text-[var(--button-primary-text)] transition hover:opacity-90"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-[var(--button-primary-bg)] px-4 text-sm font-medium text-[var(--button-primary-text)] transition hover:opacity-90"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add stream
+              Add
             </button>
             <button
               onClick={clearAll}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-4 text-sm font-medium text-[var(--text-main)] transition hover:opacity-90"
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-4 text-sm font-medium text-[var(--text-main)] transition hover:opacity-90"
             >
-              Clear all
+              Clear
             </button>
           </div>
 
           {successMessage ? (
-            <div className="mt-2 rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] px-3 py-2 text-sm text-[var(--info-text)]">
+            <div className="mt-2 rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] px-3 py-2 text-xs text-[var(--info-text)]">
               <span className="inline-flex items-center gap-2">
                 <Check className="h-3.5 w-3.5" />
                 {successMessage}
@@ -710,34 +729,23 @@ export default function App() {
           ) : null}
 
           {error ? (
-            <div className="mt-2 rounded-xl border border-[var(--note-border)] bg-[var(--note-bg)] px-3 py-2 text-sm text-[var(--note-text)]">
+            <div className="mt-2 rounded-xl border border-[var(--note-border)] bg-[var(--note-bg)] px-3 py-2 text-xs text-[var(--note-text)]">
               {error}
             </div>
           ) : null}
 
           {!audioUnlocked && (
-            <div className="mt-2 rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] px-3 py-2 text-sm text-[var(--info-text)]">
-              <strong>Audio locked:</strong> click anywhere on the page, then click a
-              stream title to enable sound.
+            <div className="mt-2 rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] px-3 py-2 text-xs text-[var(--info-text)]">
+              Click anywhere, then click a stream title to enable sound.
             </div>
           )}
-
-          <div className="mt-2 rounded-xl border border-[var(--note-border)] bg-[var(--note-bg)] px-3 py-2 text-sm text-[var(--note-text)]">
-            <strong>Note:</strong> autoplay with sound is limited by browser rules, so
-            streams start muted until the page receives user interaction.
-          </div>
         </header>
 
         {editingLabelId && (
-          <div className="mb-4 rounded-[1.5rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-3 shadow-[var(--panel-shadow)]">
+          <div className="mb-4 rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-3 shadow-[var(--panel-shadow)]">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
               <div className="min-w-0 flex-1">
-                <p className="mb-0.5 text-sm font-medium text-[var(--text-main)]">
-                  Rename stream
-                </p>
-                <p className="text-sm text-[var(--text-soft)]">
-                  Leave blank to fall back to the default label.
-                </p>
+                <p className="text-sm font-medium text-[var(--text-main)]">Rename stream</p>
               </div>
 
               <input
@@ -749,20 +757,20 @@ export default function App() {
                   if (e.key === "Escape") cancelEditLabel();
                 }}
                 placeholder="Enter a custom stream name"
-                className="h-10 min-w-0 flex-1 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--text-main)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent-border)]"
+                className="h-9 min-w-0 flex-1 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--text-main)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent-border)]"
               />
 
               <div className="flex gap-2">
                 <button
                   onClick={() => saveLabel(editingLabelId)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--button-primary-bg)] px-3 font-medium text-[var(--button-primary-text)] transition hover:opacity-90"
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-[var(--button-primary-bg)] px-3 font-medium text-[var(--button-primary-text)] transition hover:opacity-90"
                 >
                   <Check className="h-3.5 w-3.5" />
                   Save
                 </button>
                 <button
                   onClick={cancelEditLabel}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 font-medium text-[var(--text-main)] transition hover:opacity-90"
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 font-medium text-[var(--text-main)] transition hover:opacity-90"
                 >
                   <X className="h-3.5 w-3.5" />
                   Cancel
@@ -773,19 +781,18 @@ export default function App() {
         )}
 
         {!streams.length && (
-          <div className="rounded-[1.5rem] border border-dashed border-[var(--panel-border)] bg-[var(--panel-bg)] p-10 text-center shadow-[var(--panel-shadow)]">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)]">
-              <LinkIcon className="h-5 w-5 text-[var(--muted)]" />
+          <div className="rounded-[1.2rem] border border-dashed border-[var(--panel-border)] bg-[var(--panel-bg)] p-8 text-center shadow-[var(--panel-shadow)]">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)]">
+              <LinkIcon className="h-4 w-4 text-[var(--muted)]" />
             </div>
-            <h2 className="mt-3 text-xl font-semibold">No streams added yet</h2>
+            <h2 className="mt-3 text-lg font-semibold">No streams added yet</h2>
             <p className="mx-auto mt-2 max-w-2xl text-sm text-[var(--text-soft)]">
-              Paste a Twitch or YouTube link above to start building your multiview
-              page.
+              Paste a Twitch or YouTube link above to start building your multiview page.
             </p>
           </div>
         )}
 
-        {!!streams.length && focusedStream && (
+        {!!streams.length && layoutMode === "focus" && focusedStream && (
           <main className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
             <div>
               <StreamCard
@@ -804,9 +811,7 @@ export default function App() {
               />
             </div>
 
-            <div
-              className={`grid ${getGridClasses(secondaryStreams.length)} gap-4 content-start`}
-            >
+            <div className={`grid ${getGridClasses(secondaryStreams.length, layoutMode)} gap-4 content-start`}>
               {secondaryStreams.map((stream) => (
                 <StreamCard
                   key={stream.id}
@@ -828,8 +833,30 @@ export default function App() {
           </main>
         )}
 
-        {!!streams.length && !focusedStream && (
-          <main className={`grid ${getGridClasses(streams.length)} gap-4`}>
+        {!!streams.length && layoutMode !== "focus" && (
+          <main className={`grid ${getGridClasses(streams.length, layoutMode)} gap-4`}>
+            {streams.map((stream, index) => (
+              <StreamCard
+                key={stream.id}
+                stream={stream}
+                index={index}
+                total={streams.length}
+                isActive={stream.id === activeId}
+                isFocused={focusedId === stream.id}
+                onMakeActive={() => setActiveId(stream.id)}
+                onToggleFocus={() => toggleFocus(stream.id)}
+                onRemove={() => removeStream(stream.id)}
+                onMoveLeft={() => moveStreamLeft(stream.id)}
+                onMoveRight={() => moveStreamRight(stream.id)}
+                onStartEditLabel={() => startEditLabel(stream)}
+                audioUnlocked={audioUnlocked}
+              />
+            ))}
+          </main>
+        )}
+
+        {!!streams.length && layoutMode === "focus" && !focusedStream && (
+          <main className={`grid ${getGridClasses(streams.length, "side-by-side")} gap-4`}>
             {streams.map((stream, index) => (
               <StreamCard
                 key={stream.id}
