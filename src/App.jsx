@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Columns2,
@@ -442,19 +442,28 @@ function StreamCard({
   onToggleFocus,
   onRemove,
   onStartEditLabel,
-  audioUnlocked
+  audioUnlocked,
+  viewerMode
 }) {
   return (
     <article
-      className={`h-full overflow-hidden rounded-2xl border shadow-sm transition duration-150 ${
-        isFocused
-          ? "border-[var(--accent-border)] bg-[var(--card-bg)] ring-1 ring-[var(--accent-soft)]"
+      className={`group relative h-full overflow-hidden transition duration-150 ${
+        viewerMode
+          ? "rounded-none border border-black bg-black"
+          : isFocused
+          ? "rounded-2xl border border-[var(--accent-border)] bg-[var(--card-bg)] shadow-sm ring-1 ring-[var(--accent-soft)]"
           : isAudible
-          ? "border-[var(--accent-soft)] bg-[var(--card-bg)] ring-1 ring-[var(--accent-soft)]"
-          : "border-[var(--card-border)] bg-[var(--card-bg)]"
+          ? "rounded-2xl border border-[var(--accent-soft)] bg-[var(--card-bg)] shadow-sm ring-1 ring-[var(--accent-soft)]"
+          : "rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-sm"
       }`}
     >
-      <div className="drag-handle flex items-center justify-between gap-2 border-b border-[var(--card-border)] px-3 py-2">
+      <div
+        className={`drag-handle flex items-center justify-between gap-2 border-b border-[var(--card-border)] px-3 py-2 ${
+          viewerMode
+            ? "absolute left-2 top-2 z-10 max-w-[calc(100%-1rem)] rounded-xl border border-white/10 bg-black/70 opacity-0 shadow-lg backdrop-blur transition group-hover:opacity-100 group-focus-within:opacity-100"
+            : ""
+        }`}
+      >
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <div
             className="cursor-grab rounded-lg p-1.5 text-[var(--muted)] active:cursor-grabbing"
@@ -520,7 +529,11 @@ function StreamCard({
         </div>
       </div>
 
-      <div className="h-[calc(100%-68px)] min-h-[160px] bg-black">
+      <div
+        className={`bg-black ${
+          viewerMode ? "h-full min-h-0" : "h-[calc(100%-68px)] min-h-[160px]"
+        }`}
+      >
         <StreamPlayer
           stream={stream}
           isAudible={isAudible}
@@ -528,7 +541,11 @@ function StreamCard({
         />
       </div>
 
-      <div className="flex items-center justify-between px-3 py-2 text-[11px] text-[var(--muted)]">
+      <div
+        className={`items-center justify-between px-3 py-2 text-[11px] text-[var(--muted)] ${
+          viewerMode ? "hidden" : "flex"
+        }`}
+      >
         <span>{stream.type === "youtube" ? "YouTube" : "Twitch"}</span>
         <span>
           {isFocused ? "Focused" : isAudible && audioUnlocked ? "Audible" : "Muted"}
@@ -539,6 +556,8 @@ function StreamCard({
 }
 
 export default function App() {
+  const appShellRef = useRef(null);
+
   const sharedFromUrl = useMemo(() => {
     if (typeof window === "undefined") return null;
     const params = new URLSearchParams(window.location.search);
@@ -551,6 +570,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [viewerMode, setViewerMode] = useState(false);
   const [editingLabelId, setEditingLabelId] = useState(null);
   const [editingLabelValue, setEditingLabelValue] = useState("");
 
@@ -643,6 +663,26 @@ export default function App() {
       localStorage.setItem("multiview-theme", theme);
     } catch {}
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-viewer-mode", viewerMode);
+    return () => {
+      document.documentElement.removeAttribute("data-viewer-mode");
+    };
+  }, [viewerMode]);
+
+  useEffect(() => {
+    function syncFullscreenState() {
+      if (!document.fullscreenElement) {
+        setViewerMode(false);
+      }
+    }
+
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -835,6 +875,34 @@ export default function App() {
     }
   }
 
+  async function enterViewerMode() {
+    if (!streams.length) {
+      setError("Add at least one stream before entering fullscreen.");
+      return;
+    }
+
+    setError("");
+    setSuccessMessage("");
+    setEditingLabelId(null);
+    setViewerMode(true);
+
+    try {
+      await appShellRef.current?.requestFullscreen?.();
+    } catch {
+      // The clean viewer mode still works if the browser denies fullscreen.
+    }
+  }
+
+  async function exitViewerMode() {
+    setViewerMode(false);
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+    } catch {}
+  }
+
   function handleLayoutChange(_currentLayout, allLayouts) {
     setLayouts(allLayouts);
   }
@@ -862,9 +930,22 @@ export default function App() {
   }, [layouts, layoutMode, streams, focusedId]);
 
   return (
-    <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] transition-colors duration-200">
-      <div className="mx-auto max-w-[1500px] px-3 py-4 sm:px-4 lg:px-5">
-        <header className="mb-4 rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-3 py-3 shadow-[var(--panel-shadow)] backdrop-blur">
+    <div
+      ref={appShellRef}
+      className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] transition-colors duration-200"
+    >
+      <div
+        className={`mx-auto ${
+          viewerMode
+            ? "h-screen max-w-none overflow-hidden p-0"
+            : "max-w-[1500px] px-3 py-4 sm:px-4 lg:px-5"
+        }`}
+      >
+        <header
+          className={`mb-4 rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-3 py-3 shadow-[var(--panel-shadow)] backdrop-blur ${
+            viewerMode ? "hidden" : ""
+          }`}
+        >
           <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
               <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-[var(--muted)]">
@@ -884,6 +965,14 @@ export default function App() {
               >
                 <Copy className="h-3.5 w-3.5" />
                 Share
+              </button>
+
+              <button
+                onClick={enterViewerMode}
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)] px-3 text-xs font-medium text-[var(--text-main)] transition hover:opacity-90"
+              >
+                <Maximize2 className="h-3.5 w-3.5" />
+                Fullscreen
               </button>
 
               <button
@@ -967,7 +1056,43 @@ export default function App() {
           )}
         </header>
 
-        {editingLabelId && (
+        {viewerMode && !!streams.length && (
+          <div className="viewer-controls fixed bottom-3 left-1/2 z-50 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/75 px-3 py-2 text-white shadow-2xl backdrop-blur">
+            {streams.map((stream) => {
+              const isAudible = audibleIds.includes(stream.id);
+
+              return (
+                <button
+                  key={stream.id}
+                  onClick={() => toggleAudio(stream.id)}
+                  title={isAudible ? "Mute this stream" : "Unmute this stream"}
+                  className={`inline-flex h-8 max-w-[11rem] items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium transition ${
+                    isAudible
+                      ? "bg-violet-500 text-white"
+                      : "bg-white/10 text-white/80 hover:bg-white/20"
+                  }`}
+                >
+                  {isAudible && audioUnlocked ? (
+                    <Volume2 className="h-3.5 w-3.5 shrink-0" />
+                  ) : (
+                    <VolumeX className="h-3.5 w-3.5 shrink-0" />
+                  )}
+                  <span className="truncate">{getDisplayLabel(stream)}</span>
+                </button>
+              );
+            })}
+
+            <button
+              onClick={exitViewerMode}
+              className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-white px-3 text-xs font-semibold text-black transition hover:bg-white/90"
+            >
+              <Minimize2 className="h-3.5 w-3.5" />
+              Exit
+            </button>
+          </div>
+        )}
+
+        {editingLabelId && !viewerMode && (
           <div className="mb-4 rounded-[1.1rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-3 shadow-[var(--panel-shadow)]">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
               <p className="min-w-0 flex-1 text-sm font-medium text-[var(--text-main)]">
@@ -1006,7 +1131,7 @@ export default function App() {
           </div>
         )}
 
-        {!streams.length && (
+        {!streams.length && !viewerMode && (
           <div className="rounded-[1.1rem] border border-dashed border-[var(--panel-border)] bg-[var(--panel-bg)] p-8 text-center shadow-[var(--panel-shadow)]">
             <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--surface-2)]">
               <LinkIcon className="h-4 w-4 text-[var(--muted)]" />
@@ -1020,16 +1145,18 @@ export default function App() {
 
         {!!streams.length && (
           <ResponsiveGridLayout
-            className="multistream-grid"
+            className={`multistream-grid ${viewerMode ? "viewer-grid" : ""}`}
             layouts={effectiveLayouts}
             breakpoints={BREAKPOINTS}
             cols={COLS}
-            rowHeight={90}
-            margin={[16, 16]}
+            rowHeight={viewerMode ? 100 : 90}
+            margin={viewerMode ? [2, 2] : [16, 16]}
             containerPadding={[0, 0]}
             isResizable={true}
             isDraggable={true}
+            isBounded={viewerMode}
             draggableHandle=".drag-handle"
+            resizeHandles={["se", "sw", "e", "s"]}
             compactType="vertical"
             preventCollision={false}
             onLayoutChange={handleLayoutChange}
@@ -1045,6 +1172,7 @@ export default function App() {
                   onRemove={() => removeStream(stream.id)}
                   onStartEditLabel={() => startEditLabel(stream)}
                   audioUnlocked={audioUnlocked}
+                  viewerMode={viewerMode}
                 />
               </div>
             ))}

@@ -25,6 +25,13 @@ body {
   transition: background 0.2s ease, color 0.2s ease;
 }
 
+:root[data-viewer-mode],
+:root[data-viewer-mode] body {
+  height: 100%;
+  overflow: hidden;
+  background: #000000;
+}
+
 :root[data-theme="dark"] {
   --bg-main: #0b1020;
   --panel-bg: rgba(15, 23, 42, 0.88);
@@ -122,12 +129,45 @@ body {
 
 .multistream-grid .react-resizable-handle {
   opacity: 0.85;
+  height: 24px;
+  width: 24px;
 }
 
 .multistream-grid .react-resizable-handle::after {
   border-color: rgba(255, 255, 255, 0.5);
+  height: 8px;
+  width: 8px;
 }
 
 :root[data-theme="light"] .multistream-grid .react-resizable-handle::after {
   border-color: rgba(15, 23, 42, 0.35);
+}
+
+.viewer-grid {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.viewer-grid .react-grid-item {
+  background: #000000;
+}
+
+.viewer-grid .react-resizable-handle {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.viewer-grid .react-grid-item:hover .react-resizable-handle,
+.viewer-grid .react-grid-item:focus-within .react-resizable-handle {
+  opacity: 0.9;
+}
+
+.viewer-controls {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+:root[data-viewer-mode] .viewer-controls:hover,
+:root[data-viewer-mode] .viewer-controls:focus-within {
+  opacity: 1;
 }
