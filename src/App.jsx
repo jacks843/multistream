@@ -322,6 +322,28 @@ function mergeLayoutsWithStreams(existingLayouts, streams, layoutMode) {
   return next;
 }
 
+function layoutsMatchStreams(nextLayouts, streams) {
+  const streamIds = new Set(streams.map((stream) => stream.id));
+
+  for (const bp of Object.keys(COLS)) {
+    const layout = nextLayouts?.[bp];
+    if (!Array.isArray(layout)) return false;
+
+    const layoutIds = new Set(layout.map((item) => item.i));
+    if (layoutIds.size !== streamIds.size) return false;
+
+    for (const id of streamIds) {
+      if (!layoutIds.has(id)) return false;
+    }
+
+    for (const id of layoutIds) {
+      if (!streamIds.has(id)) return false;
+    }
+  }
+
+  return true;
+}
+
 function applyPresetToLayouts(streams, focusedId, layoutMode, currentLayouts) {
   if (layoutMode === "resizable") {
     return mergeLayoutsWithStreams(currentLayouts, streams, layoutMode);
@@ -732,10 +754,6 @@ export default function App() {
   }, [audibleIds]);
 
   useEffect(() => {
-    setLayouts((current) => mergeLayoutsWithStreams(current, streams, "resizable"));
-  }, [streams]);
-
-  useEffect(() => {
     if (!streams.length) {
       setFocusedId(null);
       setEditingLabelId(null);
@@ -792,14 +810,26 @@ export default function App() {
       return;
     }
 
-    setStreams((current) => [...current, parsed]);
+    const nextStreams = [...streams, parsed];
+
+    setLayouts((current) =>
+      applyPresetToLayouts(nextStreams, parsed.id, layoutMode, current)
+    );
+    setStreams(nextStreams);
     setFocusedId(parsed.id);
     setInput("");
     setSuccessMessage("Stream added.");
   }
 
   function removeStream(id) {
-    setStreams((current) => current.filter((stream) => stream.id !== id));
+    const nextStreams = streams.filter((stream) => stream.id !== id);
+    const nextFocusedId =
+      focusedId === id ? nextStreams[0]?.id || null : focusedId;
+
+    setLayouts((current) =>
+      applyPresetToLayouts(nextStreams, nextFocusedId, layoutMode, current)
+    );
+    setStreams(nextStreams);
     setAudibleIds((current) => current.filter((value) => value !== id));
 
     if (editingLabelId === id) {
@@ -904,6 +934,10 @@ export default function App() {
   }
 
   function handleLayoutChange(_currentLayout, allLayouts) {
+    if (!layoutsMatchStreams(allLayouts, streams)) {
+      return;
+    }
+
     setLayouts(allLayouts);
   }
 
